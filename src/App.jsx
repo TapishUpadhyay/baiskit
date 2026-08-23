@@ -185,13 +185,12 @@ const findMatches = () => {
         </label>
 
         <input
-          type="number"
-          value={quantity}
-          onChange={(e) => setQuantity(e.target.value)}
-          defaultValue="1"
-          min="1"
-          className="w-full rounded-xl border px-4 py-3"
-        />
+  type="number"
+  value={quantity}
+  onChange={(e) => setQuantity(e.target.value)}
+  min="1"
+  className="w-full rounded-xl border px-4 py-3"
+/>
       </div>
 
       <button
