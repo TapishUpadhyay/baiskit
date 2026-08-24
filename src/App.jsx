@@ -43,8 +43,8 @@ export default function App() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/compare/${encodeURIComponent(search)}`
-      )
+  `https://baiskit.onrender.com/api/compare/${encodeURIComponent(search)}`
+)
 
       if (!response.ok) {
         setApiResults(null)
