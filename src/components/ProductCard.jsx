@@ -83,5 +83,8 @@ export default function ProductCard({ product, onAdd }) {
         </div>
       </div>
     </div>
-  )
+  )<p className="text-[10px] text-slate-500">
+  📍 {product.location || "Nearby"}
+</p>
+  
 }
