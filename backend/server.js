@@ -56,6 +56,32 @@ app.get("/api/products", (req, res) => {
 });
 
 
+app.get("/api/compare/:productName", (req, res) => {
+  const productName = req.params.productName.toLowerCase();
+
+  const matches = products.filter(
+    (product) =>
+      product.name.toLowerCase().includes(productName)
+  );
+
+  if (matches.length === 0) {
+    return res.status(404).json({
+      message: "No matching products found"
+    });
+  }
+
+  const sortedMatches = [...matches].sort(
+    (a, b) => a.price - b.price
+  );
+
+  res.json({
+    product: req.params.productName,
+    totalMatches: sortedMatches.length,
+    bestDeal: sortedMatches[0],
+    options: sortedMatches
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`Baiskit API running on http://localhost:${PORT}`);
 });
