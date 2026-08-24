@@ -1,4 +1,5 @@
-import { useState } from "react"
+
+import { useState, useRef } from "react"
 import ProductCard from "./components/ProductCard"
 import VendorCard from "./components/VendorCard"
 import OrderCard from "./components/OrderCard"
@@ -11,7 +12,7 @@ export default function App() {
   const [page, setPage] = useState("home")
   const [selectedVendor, setSelectedVendor] = useState(null)
   const [selectedCategory, setSelectedCategory] = useState("All")
-
+  
   // AI Reverse Demand Matchmaker State
   const [request, setRequest] = useState("")
   const [budget, setBudget] = useState("")
@@ -24,10 +25,47 @@ export default function App() {
   const [promoCode, setPromoCode] = useState("")
   const [discountPercent, setDiscountPercent] = useState(0)
   const [toast, setToast] = useState(null)
+  const [apiResults, setApiResults] = useState(null)
+  const [isLoading, setIsLoading] = useState(false)
+
+  const toastTimerRef = useRef(null)
 
   const showToast = (msg) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     setToast(msg)
-    setTimeout(() => setToast(null), 2500)
+    toastTimerRef.current = setTimeout(() => setToast(null), 2500)
+  }
+
+  const searchBaiskit = async () => {
+    if (!search.trim()) return
+    setIsLoading(true)
+    setPage("home") // Ensure user sees the search results
+
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/compare/${encodeURIComponent(search)}`
+      )
+
+      if (!response.ok) {
+        setApiResults(null)
+        showToast("No comparison found for this product")
+        return
+      }
+
+      const data = await response.json()
+      setApiResults(data)
+    } catch (error) {
+      console.error("Baiskit API error:", error)
+      setApiResults(null)
+      showToast("Could not connect to comparison server")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const clearSearch = () => {
+    setSearch("")
+    setApiResults(null)
   }
 
   // Cart operations
@@ -64,7 +102,7 @@ export default function App() {
     }
   }
 
-  const subtotal = cart.reduce((sum, item) => sum + item.price * (item.qty || 1), 0)
+  const subtotal = cart.reduce((sum, item) => sum + (Number(item.price) || 0) * (item.qty || 1), 0)
   const discountAmount = subtotal * discountPercent
   const grandTotal = Math.max(0, subtotal - discountAmount)
 
@@ -91,9 +129,14 @@ export default function App() {
 
   // Filtered Products
   const filteredProducts = products.filter((product) => {
-    const matchesSearch = product.name.toLowerCase().includes(search.toLowerCase()) ||
-      (product.vendor && product.vendor.toLowerCase().includes(search.toLowerCase()))
-    const matchesCategory = selectedCategory === "All" || (product.category && product.category.toLowerCase() === selectedCategory.toLowerCase())
+    const productName = product.name?.toLowerCase() || ""
+    const vendorName = product.vendor?.toLowerCase() || ""
+    const productCategory = product.category?.toLowerCase() || ""
+    const query = search.toLowerCase()
+
+    const matchesSearch = productName.includes(query) || vendorName.includes(query)
+    const matchesCategory = selectedCategory === "All" || productCategory === selectedCategory.toLowerCase()
+    
     return matchesSearch && matchesCategory
   })
 
@@ -104,9 +147,14 @@ export default function App() {
       return
     }
     const results = sellers.filter((seller) => {
-      const matchText = seller.product.toLowerCase().includes(request.toLowerCase()) ||
-        seller.name.toLowerCase().includes(request.toLowerCase())
-      const matchBudget = budget ? seller.price <= Number(budget) : true
+      const productName = seller.product?.toLowerCase() || ""
+      const sellerName = seller.name?.toLowerCase() || ""
+      const query = request.toLowerCase()
+
+      const matchText = productName.includes(query) || sellerName.includes(query)
+      const totalPrice = (Number(seller.price) || 0) * quantity
+      const matchBudget = budget ? totalPrice <= Number(budget) : true
+      
       return matchText && matchBudget
     })
     setMatches(results)
@@ -131,7 +179,7 @@ export default function App() {
         <div className="mx-auto max-w-lg px-5 py-3.5">
           <div className="flex items-center justify-between">
             <div 
-              onClick={() => setPage("home")} 
+              onClick={() => { setPage("home"); clearSearch(); }} 
               className="flex items-center gap-3 cursor-pointer group"
             >
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-700 to-violet-600 text-xl shadow-lg shadow-indigo-600/25 text-white transition-transform group-hover:scale-105">
@@ -170,14 +218,19 @@ export default function App() {
             </div>
             <input
               type="text"
-              placeholder="Search gadgets, tables, shoes, books..."
+              placeholder="Search & hit Enter to compare deals..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  searchBaiskit()
+                }
+              }}
               className="w-full rounded-2xl border border-slate-200/90 bg-slate-100/70 pl-10 pr-9 py-2.5 text-xs font-medium text-slate-800 placeholder-slate-400 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
             />
             {search && (
               <button 
-                onClick={() => setSearch("")} 
+                onClick={clearSearch} 
                 className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
               >
                 ✕
@@ -191,7 +244,7 @@ export default function App() {
       <main className="mx-auto max-w-lg px-5 py-5 pb-28">
 
         {/* 1. Basket View */}
-        {page === "basket" ? (
+        {page === "basket" && (
           <section className="animate-in fade-in duration-300">
             <div className="flex items-center justify-between mb-5">
               <div>
@@ -239,7 +292,7 @@ export default function App() {
                         <div>
                           <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{item.name}</h4>
                           <p className="text-[11px] text-slate-500">{item.vendor}</p>
-                          <p className="mt-1 text-xs font-black text-indigo-600">₹{item.price * (item.qty || 1)}</p>
+                          <p className="mt-1 text-xs font-black text-indigo-600">₹{(item.price || 0) * (item.qty || 1)}</p>
                         </div>
                       </div>
 
@@ -323,9 +376,10 @@ export default function App() {
               </div>
             )}
           </section>
+        )}
 
-        /* 2. Baiskit Demand Creator */
-        ) : page === "baiskit" ? (
+        {/* 2. Baiskit Demand Creator */}
+        {page === "baiskit" && (
           <section className="animate-in fade-in duration-300">
             <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-950 via-slate-900 to-violet-950 p-6 text-white shadow-xl">
               <div className="absolute -right-6 -bottom-6 h-28 w-28 rounded-full bg-violet-500/20 blur-2xl"></div>
@@ -480,9 +534,10 @@ export default function App() {
               </div>
             )}
           </section>
+        )}
 
-        /* 3. Vendors Directory */
-        ) : page === "vendors" ? (
+        {/* 3. Vendors Directory */}
+        {page === "vendors" && (
           <section className="animate-in fade-in duration-300">
             <div className="mb-5">
               <h2 className="text-2xl font-black tracking-tight text-slate-900">Local Verified Stores 🏪</h2>
@@ -505,9 +560,10 @@ export default function App() {
               ))}
             </div>
           </section>
+        )}
 
-        /* 4. Single Store Page */
-        ) : page === "store" ? (
+        {/* 4. Single Store Page */}
+        {page === "store" && (
           <section className="animate-in fade-in duration-300">
             <button
               onClick={() => setPage("vendors")}
@@ -520,7 +576,7 @@ export default function App() {
               <div className="flex justify-between items-start">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-black text-slate-900">{selectedVendor}</h2>
+                    <h2 className="text-xl font-black text-slate-900">{selectedVendor || "Local Merchant"}</h2>
                     <span className="h-4 w-4 rounded-full bg-blue-600 text-[9px] text-white flex items-center justify-center font-bold">✓</span>
                   </div>
                   <p className="text-xs text-slate-500 mt-1">📍 100ft Road, Indiranagar, Bengaluru</p>
@@ -557,9 +613,10 @@ export default function App() {
               </div>
             </div>
           </section>
+        )}
 
-        /* 5. Orders Page */
-        ) : page === "orders" ? (
+        {/* 5. Orders Page */}
+        {page === "orders" && (
           <section className="animate-in fade-in duration-300">
             <div className="mb-5">
               <h2 className="text-2xl font-black tracking-tight text-slate-900">Your Orders 📦</h2>
@@ -588,10 +645,197 @@ export default function App() {
               </div>
             )}
           </section>
+        )}
 
-        /* 6. Home Product Feed */
-        ) : (
+        {/* 6. Home Product Feed */}
+        {page === "home" && (
           <div className="animate-in fade-in duration-300 space-y-6">
+            
+            {/* Loading Indicator */}
+            {isLoading && (
+              <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-100 text-center text-xs font-bold text-indigo-700 animate-pulse">
+                🔍 Searching best deals across nearby stores...
+              </div>
+            )}
+
+            {/* Baiskit Comparison Section */}
+            {apiResults && (
+              <section className="rounded-3xl border border-indigo-100 bg-gradient-to-b from-indigo-50/50 to-white p-5 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+                      <span>Baiskit Price Match</span>
+                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">LIVE</span>
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {apiResults.totalMatches ?? 0} local options found for "{apiResults.product || search}"
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setApiResults(null)}
+                    className="text-xs font-bold text-slate-400 hover:text-slate-600 bg-white border border-slate-200 px-2.5 py-1 rounded-xl shadow-xs"
+                  >
+                    ✕ Close
+                  </button>
+                </div>
+
+                {/* Savings Callout */}
+                {apiResults.savings?.amount > 0 && (
+                  <div className="rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 p-3.5 text-white shadow-md shadow-emerald-500/20 flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-100">Local Advantage</p>
+                      <p className="text-xs font-black mt-0.5">
+                        Save ₹{apiResults.savings.amount} ({apiResults.savings.percent}% OFF) vs Online Apps!
+                      </p>
+                    </div>
+                    <span className="text-2xl">💰</span>
+                  </div>
+                )}
+
+                {/* Best Local Deal vs Commercial Apps Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  
+                  {/* Best Local Deal */}
+                  {apiResults.bestDeal && (
+                    <div className="rounded-2xl bg-white border-2 border-indigo-500/30 p-4 shadow-sm relative overflow-hidden flex flex-col justify-between">
+                      <div className="absolute top-0 right-0 bg-indigo-600 text-white text-[9px] font-black uppercase px-2.5 py-0.5 rounded-bl-xl">
+                        Local Lowest
+                      </div>
+                      
+                      <div>
+                        <span className="inline-block rounded-lg bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-700 mb-1.5 border border-emerald-200">
+                          🏆 Best Local Seller
+                        </span>
+
+                        <h3 className="text-sm font-black text-slate-900">
+                          {apiResults.bestDeal.seller}
+                        </h3>
+
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {apiResults.bestDeal.condition} • {apiResults.bestDeal.distance}
+                        </p>
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                        <div>
+                          <p className="text-[10px] uppercase font-bold text-slate-400">Baiskit Price</p>
+                          <p className="text-lg font-black text-indigo-600">
+                            ₹{apiResults.bestDeal.price}
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            addToCart({
+                              id: `compare-${apiResults.bestDeal.id || Date.now()}`,
+                              name: `${apiResults.product || search} (${apiResults.bestDeal.condition})`,
+                              price: apiResults.bestDeal.price,
+                              vendor: apiResults.bestDeal.seller,
+                              image: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=200&q=80"
+                            })
+                          }}
+                          className="rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 transition active:scale-95 shadow-sm"
+                        >
+                          Add to Basket 🛒
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Commercial Apps Comparison */}
+                  {apiResults.commercialApps?.length > 0 && (
+                    <div className="rounded-2xl border border-slate-200/90 bg-slate-50/70 p-4 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Commercial Apps</p>
+                        <span className="text-[10px] text-slate-400">Market Rates</span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {apiResults.commercialApps.map((app) => (
+                          <div
+                            key={app.platform}
+                            className="flex items-center justify-between rounded-xl bg-white p-2.5 border border-slate-200/80 shadow-xs"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">{app.logo}</span>
+                              <div>
+                                <h4 className="text-xs font-bold text-slate-900">{app.platform}</h4>
+                                <p className="text-[10px] text-slate-400">{app.delivery}</p>
+                              </div>
+                            </div>
+
+                            <div className="text-right">
+                              <p className="text-xs font-bold text-slate-700 line-through opacity-75">
+                                ₹{app.price}
+                              </p>
+                              {apiResults.bestDeal && (
+                                <span className="text-[9px] font-bold text-rose-500">
+                                  +₹{Math.max(0, app.price - apiResults.bestDeal.price)} higher
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+
+                {/* Other Local Sellers */}
+                {apiResults.options?.length > 1 && (
+                  <div className="mt-2 space-y-2">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Other Local Sellers</p>
+                    <div className="space-y-2">
+                      {apiResults.options.slice(1).map((option) => (
+                        <div
+                          key={option.id || option.seller}
+                          className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm"
+                        >
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-900">
+                              {option.seller}
+                            </h4>
+
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {option.sellerType} • {option.condition} • {option.distance}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <div className="text-right">
+                              <p className="text-xs font-black text-slate-900">
+                                ₹{option.price}
+                              </p>
+                              {option.verified && (
+                                <p className="text-[10px] text-emerald-600 font-bold">
+                                  ✓ Verified
+                                </p>
+                              )}
+                            </div>
+                            
+                            <button
+                              onClick={() => {
+                                addToCart({
+                                  id: `compare-${option.id || Date.now()}`,
+                                  name: `${apiResults.product || search} (${option.condition})`,
+                                  price: option.price,
+                                  vendor: option.seller,
+                                  image: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=200&q=80"
+                                })
+                              }}
+                              className="rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-800 transition active:scale-95"
+                            >
+                              Add
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
 
             {/* Categories */}
             <section>
@@ -666,15 +910,21 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3.5">
-                {filteredProducts.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    onAdd={() => addToCart(product)}
-                  />
-                ))}
-              </div>
+              {filteredProducts.length === 0 ? (
+                <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500">
+                  No products found matching "{search}".
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3.5">
+                  {filteredProducts.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      onAdd={() => addToCart(product)}
+                    />
+                  ))}
+                </div>
+              )}
             </section>
           </div>
         )}
