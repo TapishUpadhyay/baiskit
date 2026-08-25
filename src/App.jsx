@@ -869,6 +869,7 @@ export default function App() {
                   { name: "Home", icon: "🛋️" },
                   { name: "Fashion", icon: "👟" },
                   { name: "Books", icon: "📖" },
+                  { name: "Gaming", icon: "🎮" },
                 ].map((cat) => {
                   const isActive = selectedCategory.toLowerCase() === cat.name.toLowerCase()
                   return (
