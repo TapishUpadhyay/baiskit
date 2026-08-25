@@ -226,15 +226,27 @@ export default function App() {
                   searchBaiskit()
                 }
               }}
-              className="w-full rounded-2xl border border-slate-200/90 bg-slate-100/70 pl-10 pr-9 py-2.5 text-xs font-medium text-slate-800 placeholder-slate-400 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
+              className="w-full rounded-2xl border border-slate-200/90 bg-slate-100/70 pl-10 pr-16 py-2.5 text-xs font-medium text-slate-800 placeholder-slate-400 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
             />
             {search && (
-              <button 
-                onClick={clearSearch} 
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
-              >
-                ✕
-              </button>
+                  <>
+                    <button
+                      onClick={searchBaiskit}
+                      disabled={isLoading}
+                      aria-label="Search"
+                      className="absolute inset-y-0 right-8 flex items-center pr-1 text-indigo-500 hover:text-indigo-700 transition disabled:opacity-50"
+                    >
+                      🔍
+                    </button>
+                            
+                    <button 
+                      onClick={clearSearch} 
+                      aria-label="Clear search"
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 transition"
+                    >
+                      ✕
+                    </button>
+                  </>
             )}
           </div>
         </div>
