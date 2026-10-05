@@ -1,5 +1,14 @@
+
+require("dotenv").config();
+console.log(
+  "Google API key loaded:",
+  process.env.GOOGLE_MAPS_API_KEY ? "YES" : "NO"
+);
+
+const { getBaiskitPrices } = require("./priceSources/baiskit");
 const express = require("express");
 const cors = require("cors");
+const axios = require("axios");
 
 const app = express();
 
@@ -245,8 +254,173 @@ const products = [
   }
 ];
 
-app.get("/api/products", (req, res) => {
-  res.json(products);
+
+// Convert Baiskit product/category into a valid Google Places type
+function getGooglePlaceType(productOrCategory) {
+  const q = productOrCategory.toLowerCase();
+
+  if (
+    q.includes("book") ||
+    q.includes("novel") ||
+    q.includes("textbook")
+  ) {
+    return "book_store";
+  }
+
+  if (
+    q.includes("headphone") ||
+    q.includes("earbud") ||
+    q.includes("keyboard") ||
+    q.includes("charger") ||
+    q.includes("electronics") ||
+    q.includes("gadget")
+  ) {
+    return "electronics_store";
+  }
+
+  if (
+    q.includes("desk") ||
+    q.includes("chair") ||
+    q.includes("furniture")
+  ) {
+    return "furniture_store";
+  }
+
+  if (
+    q.includes("shoe") ||
+    q.includes("sneaker")
+  ) {
+    return "shoe_store";
+  }
+
+  if (
+    q.includes("shirt") ||
+    q.includes("clothing") ||
+    q.includes("fashion")
+  ) {
+    return "clothing_store";
+  }
+
+  return "store";
+}
+
+
+// Google Places API (New) - Find nearby vendors
+app.get("/api/vendors/nearby", async (req, res) => {
+  try {
+const { lat, lng, keyword = "store" } = req.query;
+
+const placeType = getGooglePlaceType(keyword);
+    if (!lat || !lng) {
+      return res.status(400).json({
+        error: "Latitude and longitude are required"
+      });
+    }
+
+    const response = await axios.post(
+      "https://places.googleapis.com/v1/places:searchNearby",
+      {
+        includedTypes: [placeType],
+        maxResultCount: 10,
+        rankPreference: "DISTANCE",
+        locationRestriction: {
+          circle: {
+            center: {
+              latitude: Number(lat),
+              longitude: Number(lng)
+            },
+            radius: 5000
+          }
+        }
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": process.env.GOOGLE_MAPS_API_KEY,
+          "X-Goog-FieldMask":
+            "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.currentOpeningHours,places.googleMapsUri"
+        }
+      }
+    );
+
+    console.log("Google Places response:", response.data);
+
+    const places = response.data.places || [];
+
+const vendors = places
+  .map((place) => {
+    const vendorLat = place.location?.latitude;
+    const vendorLng = place.location?.longitude;
+
+    const distanceKm =
+      vendorLat && vendorLng
+        ? calculateDistanceKm(
+            Number(lat),
+            Number(lng),
+            vendorLat,
+            vendorLng
+          )
+        : null;
+
+    return {
+      name: place.displayName?.text || "Unknown",
+      address: place.formattedAddress || "",
+      rating: place.rating || null,
+      totalRatings: place.userRatingCount || 0,
+      placeId: place.id || null,
+      location: place.location || null,
+
+      distanceKm: distanceKm
+        ? Number(distanceKm.toFixed(2))
+        : null,
+
+      distance:
+        distanceKm !== null
+          ? `${distanceKm.toFixed(2)} km away`
+          : "Distance unavailable",
+
+      openNow: place.currentOpeningHours?.openNow ?? null,
+      mapsUrl: place.googleMapsUri || null,
+
+      priceAvailable: false,
+      source: "Google Places"
+    };
+  })
+  .filter(
+    (vendor) =>
+      vendor.distanceKm === null ||
+      vendor.distanceKm <= 5
+  )
+  .sort((a, b) => {
+    if (a.distanceKm === null) return 1;
+    if (b.distanceKm === null) return -1;
+    return a.distanceKm - b.distanceKm;
+  });
+
+    res.json({
+      success: true,
+      keyword,
+      placeType,
+      location: {
+        lat: Number(lat),
+        lng: Number(lng)
+      },
+      totalVendors: vendors.length,
+      vendors
+    });
+
+  } catch (error) {
+    console.error(
+      "Google Places API error:",
+      error.response?.data || error.message
+    );
+
+    res.status(500).json({
+      success: false,
+      error: "Unable to fetch nearby vendors",
+      details: error.response?.data || error.message
+    });
+  }
 });
 
 // Helper to generate dynamic benchmark comparison for any product
@@ -356,6 +530,153 @@ app.get("/api/compare/:productName", (req, res) => {
 
   const responseData = buildComparisonResponse(rawQuery, matches);
   res.json(responseData);
+});
+
+// Calculate distance between two coordinates using Haversine formula
+function calculateDistanceKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2;
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
+// Combined Baiskit product + nearby vendor search
+app.get("/api/search", async (req, res) => {
+  try {
+    const { product, lat, lng } = req.query;
+
+    if (!product) {
+      return res.status(400).json({
+        success: false,
+        error: "Product name is required"
+      });
+    }
+
+    if (!lat || !lng) {
+      return res.status(400).json({
+        success: false,
+        error: "Latitude and longitude are required"
+      });
+    }
+
+    const searchLower = product.toLowerCase().trim();
+
+    // Find matching products from Baiskit database
+    const matches = products.filter((item) =>
+      item.name.toLowerCase().includes(searchLower) ||
+      item.category.toLowerCase().includes(searchLower)
+    );
+const baiskitPrices = getBaiskitPrices(product, matches);
+    // Determine Google vendor type
+    const category =
+      matches.length > 0 ? matches[0].category : product;
+
+    const placeType = getGooglePlaceType(category);
+
+    // Find nearby Google vendors
+    const googleResponse = await axios.post(
+      "https://places.googleapis.com/v1/places:searchNearby",
+      {
+        includedTypes: [placeType],
+        maxResultCount: 10,
+        rankPreference: "DISTANCE",
+        locationRestriction: {
+          circle: {
+            center: {
+              latitude: Number(lat),
+              longitude: Number(lng)
+            },
+            radius: 5000
+          }
+        }
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": process.env.GOOGLE_MAPS_API_KEY,
+          "X-Goog-FieldMask":
+            "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.currentOpeningHours,places.googleMapsUri"
+        }
+      }
+    );
+
+    const places = googleResponse.data.places || [];
+
+   const vendors = places
+  .map((place) => {
+    const vendorLat = place.location?.latitude;
+    const vendorLng = place.location?.longitude;
+
+    const distanceKm = calculateDistanceKm(
+      Number(lat),
+      Number(lng),
+      Number(vendorLat),
+      Number(vendorLng)
+    );
+
+    return {
+      name: place.displayName?.text || "Unknown",
+      address: place.formattedAddress || "",
+      rating: place.rating || null,
+      totalRatings: place.userRatingCount || 0,
+      placeId: place.id || null,
+      location: place.location || null,
+
+      distanceKm: Number(distanceKm.toFixed(2)),
+      distance: `${distanceKm.toFixed(2)} km away`,
+
+      openNow: place.currentOpeningHours?.openNow ?? null,
+      mapsUrl: place.googleMapsUri || null,
+
+      priceAvailable: false,
+      source: "Google Places"
+    };
+  })
+  .filter((vendor) => vendor.distanceKm <= 5)
+  .sort((a, b) => a.distanceKm - b.distanceKm);
+
+res.json({
+  success: true,
+
+  search: {
+    product,
+    category,
+    googlePlaceType: placeType
+  },
+
+  baiskitListings: matches,
+
+  priceResults: baiskitPrices,
+
+  nearbyVendors: vendors,
+
+  totalListings: matches.length,
+  totalNearbyVendors: vendors.length,
+  totalPriceResults: baiskitPrices.length
+});
+
+  } catch (error) {
+    console.error(
+      "Baiskit search error:",
+      error.response?.data || error.message
+    );
+
+    res.status(500).json({
+      success: false,
+      error: "Unable to perform product search",
+      details: error.response?.data || error.message
+    });
+  }
 });
 
 app.listen(PORT, () => {
