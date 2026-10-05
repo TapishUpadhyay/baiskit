@@ -94,3 +94,15 @@ npm run dev	Starts local development server
 npm run build	Builds app for production
 npm run preview	Locally previews production build
 npm run lint	Runs ESLint to check for code issues
+# BaisKit 🛍️
+
+BaisKit is a hyper-local marketplace that connects customers with local vendors and helps users discover products available in their area.
+
+## Features
+
+- 🛒 Browse local products
+- 🏪 Discover local vendors
+- 🔎 Search and filter products
+- 📦 Manage orders
+- 📍 Hyper-local marketplace experience
+- 📱 Responsive interface

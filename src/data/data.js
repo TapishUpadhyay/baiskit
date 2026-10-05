@@ -47,6 +47,18 @@
     badge: "Top Rated",
     image: "https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&w=600&q=80",
   },
+  {
+  id: 5,
+  name: "Wireless Gaming Mouse",
+  category: "Gaming",
+  price: 1299,
+  originalPrice: 1799,
+  vendor: "Game Zone",
+  rating: 4.6,
+  reviews: 96,
+  badge: "Hot Deal",
+  image: "https://imgs.search.brave.com/ac1vLZCcDTdDLOni0xy7-vDZcIZdNnV2reQvmmop644/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9rcmVv/LXRlY2guY29tL2Nk/bi9zaG9wL2ZpbGVz/L0hhd2tfUERQX3dl/YnNpdGUuMjY4MV8x/LnBuZz92PTE3ODQx/MTUwMjUmd2lkdGg9/MTIwMA"
+}
 ]
 
 export const sellers = [
