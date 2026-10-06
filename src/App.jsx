@@ -1,4 +1,4 @@
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import ProductCard from "./components/ProductCard"
 import VendorCard from "./components/VendorCard"
 import OrderCard from "./components/OrderCard"
@@ -16,20 +16,17 @@ export default function App() {
   const [selectedVendor, setSelectedVendor] = useState(null)
   const [selectedCategory, setSelectedCategory] = useState("All")
 
-  // Demand
   const [request, setRequest] = useState("")
   const [budget, setBudget] = useState("")
   const [quantity, setQuantity] = useState(1)
   const [matches, setMatches] = useState([])
 
-  // Search / Orders / Promo
   const [search, setSearch] = useState("")
   const [orders, setOrders] = useState([])
   const [promoCode, setPromoCode] = useState("")
   const [discountPercent, setDiscountPercent] = useState(0)
   const [toast, setToast] = useState(null)
 
-  // Backend comparison
   const [apiResults, setApiResults] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [userLocation, setUserLocation] = useState(null)
@@ -51,6 +48,53 @@ export default function App() {
       setToast(null)
     }, 2500)
   }
+
+  // --------------------------------------------------
+  // Nearby Vendors
+  // --------------------------------------------------
+
+  useEffect(() => {
+    if (page !== "vendors") return
+
+    if (!navigator.geolocation) {
+      showToast("Location is not supported by your browser")
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude
+        const lng = position.coords.longitude
+
+        setUserLocation({ lat, lng })
+
+        try {
+          const response = await fetch(
+            `https://baiskit.onrender.com/api/vendors/nearby?lat=${lat}&lng=${lng}&keyword=store`
+          )
+
+          const data = await response.json()
+
+          if (data.success) {
+            setApiResults((prev) => ({
+              ...(prev || {}),
+              nearbyVendors: data.vendors || []
+            }))
+          }
+        } catch (error) {
+          console.error("Nearby vendors error:", error)
+        }
+      },
+      (error) => {
+        console.error("Location error:", error)
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 300000
+      }
+    )
+  }, [page])
 
   // --------------------------------------------------
   // Get User Location
@@ -117,11 +161,25 @@ export default function App() {
 
       const data = await response.json().catch(() => null)
 
-      if (!response.ok || !data?.success) {
+      if (!response.ok) {
         setApiResults(null)
 
         showToast(
-          data?.message || "No comparison found for this product"
+          data?.message ||
+            data?.error ||
+            `Baiskit server error (${response.status})`
+        )
+
+        return
+      }
+
+      if (!data?.success) {
+        setApiResults(null)
+
+        showToast(
+          data?.message ||
+            data?.error ||
+            "No comparison found for this product"
         )
 
         return
@@ -130,21 +188,38 @@ export default function App() {
       setApiResults(data)
 
       if (!data.priceResults?.length) {
-        showToast("No live prices found yet")
+        showToast(
+          "No live prices found for this product. Try another product."
+        )
       }
     } catch (error) {
-      console.error("Baiskit API error:", error)
+      console.error("Baiskit search error:", error)
 
       setApiResults(null)
 
-      if (
-        error.message === "Location permission denied" ||
-        error.message === "Geolocation not supported"
-      ) {
+      if (error.message === "Location permission denied") {
+        showToast(
+          "Location access is required to find nearby prices and stores"
+        )
         return
       }
 
-      showToast("Unable to connect to Baiskit right now")
+      if (error.message === "Geolocation not supported") {
+        showToast("Your browser does not support location services")
+        return
+      }
+
+      if (
+        error.name === "TypeError" ||
+        error.message?.toLowerCase().includes("fetch")
+      ) {
+        showToast(
+          "Unable to connect to Baiskit. Please try again."
+        )
+        return
+      }
+
+      showToast("Something went wrong. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -217,10 +292,7 @@ export default function App() {
   // --------------------------------------------------
 
   const applyPromo = () => {
-    if (
-      promoCode.trim().toUpperCase() ===
-      "BAISKIT20"
-    ) {
+    if (promoCode.trim().toUpperCase() === "BAISKIT20") {
       setDiscountPercent(0.2)
       showToast("🎉 20% Discount Activated!")
     } else {
@@ -240,12 +312,16 @@ export default function App() {
     0
   )
 
-  const discountAmount =
-    subtotal * discountPercent
+  const discountAmount = subtotal * discountPercent
 
   const grandTotal = Math.max(
     0,
     subtotal - discountAmount
+  )
+
+  const cartCount = cart.reduce(
+    (sum, item) => sum + (item.qty || 1),
+    0
   )
 
   // --------------------------------------------------
@@ -270,8 +346,7 @@ export default function App() {
         }
       ),
       status: "Confirmed",
-      estimatedDelivery:
-        "Today, by 8:30 PM"
+      estimatedDelivery: "Today, by 8:30 PM"
     }
 
     setOrders([newOrder, ...orders])
@@ -280,45 +355,37 @@ export default function App() {
     setPromoCode("")
     setPage("orders")
 
-    showToast(
-      "🎉 Order Placed Successfully!"
-    )
+    showToast("🎉 Order Placed Successfully!")
   }
 
   // --------------------------------------------------
   // Product Filter
   // --------------------------------------------------
 
-  const filteredProducts = products.filter(
-    (product) => {
-      const productName =
-        product.name?.toLowerCase() || ""
+  const filteredProducts = products.filter((product) => {
+    const productName =
+      product.name?.toLowerCase() || ""
 
-      const vendorName =
-        product.vendor?.toLowerCase() || ""
+    const vendorName =
+      product.vendor?.toLowerCase() || ""
 
-      const productCategory =
-        product.category?.toLowerCase() || ""
+    const productCategory =
+      product.category?.toLowerCase() || ""
 
-      const query =
-        search.toLowerCase()
+    const query = search.toLowerCase()
 
-      const matchesSearch =
-        !query ||
-        productName.includes(query) ||
-        vendorName.includes(query)
+    const matchesSearch =
+      !query ||
+      productName.includes(query) ||
+      vendorName.includes(query)
 
-      const matchesCategory =
-        selectedCategory === "All" ||
-        productCategory ===
-          selectedCategory.toLowerCase()
+    const matchesCategory =
+      selectedCategory === "All" ||
+      productCategory ===
+        selectedCategory.toLowerCase()
 
-      return (
-        matchesSearch &&
-        matchesCategory
-      )
-    }
-  )
+    return matchesSearch && matchesCategory
+  })
 
   // --------------------------------------------------
   // Demand Matchmaker
@@ -332,35 +399,29 @@ export default function App() {
       return
     }
 
-    const results = sellers.filter(
-      (seller) => {
-        const productName =
-          seller.product?.toLowerCase() || ""
+    const results = sellers.filter((seller) => {
+      const productName =
+        seller.product?.toLowerCase() || ""
 
-        const sellerName =
-          seller.name?.toLowerCase() || ""
+      const sellerName =
+        seller.name?.toLowerCase() || ""
 
-        const query =
-          request.toLowerCase()
+      const query = request.toLowerCase()
 
-        const matchText =
-          productName.includes(query) ||
-          sellerName.includes(query)
+      const matchText =
+        productName.includes(query) ||
+        sellerName.includes(query)
 
-        const totalPrice =
-          (Number(seller.price) || 0) *
-          quantity
+      const totalPrice =
+        (Number(seller.price) || 0) *
+        quantity
 
-        const matchBudget = budget
-          ? totalPrice <= Number(budget)
-          : true
+      const matchBudget = budget
+        ? totalPrice <= Number(budget)
+        : true
 
-        return (
-          matchText &&
-          matchBudget
-        )
-      }
-    )
+      return matchText && matchBudget
+    })
 
     setMatches(results)
 
@@ -381,134 +442,149 @@ export default function App() {
   }
 
   // --------------------------------------------------
-  // Render
+  // Shared UI
   // --------------------------------------------------
 
-  return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans antialiased selection:bg-indigo-500 selection:text-white">
+  const SectionTitle = ({
+    eyebrow,
+    title,
+    description,
+    action
+  }) => (
+    <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+      <div>
+        {eyebrow && (
+          <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-indigo-600">
+            {eyebrow}
+          </p>
+        )}
 
-      {/* TOAST */}
+        <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-950">
+          {title}
+        </h2>
+
+        {description && (
+          <p className="mt-1 text-xs sm:text-sm text-slate-500">
+            {description}
+          </p>
+        )}
+      </div>
+
+      {action}
+    </div>
+  )
+
+  return (
+    <div className="min-h-screen bg-[#F6F7FB] text-slate-900 font-sans antialiased selection:bg-indigo-500 selection:text-white">
+
+      {/* --------------------------------------------------
+          TOAST
+      -------------------------------------------------- */}
 
       {toast && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 rounded-full bg-slate-900/95 backdrop-blur-xl px-5 py-2.5 text-xs font-bold text-white shadow-2xl border border-slate-800">
-          <span>✨</span>
-          <span>{toast}</span>
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] max-w-[calc(100%-32px)]">
+          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/95 backdrop-blur-xl px-5 py-3 text-xs font-bold text-white shadow-2xl shadow-slate-900/20">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10">
+              ✨
+            </span>
+            <span className="truncate">
+              {toast}
+            </span>
+          </div>
         </div>
       )}
 
-      {/* HEADER */}
+      {/* --------------------------------------------------
+          HEADER
+      -------------------------------------------------- */}
 
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-slate-200/80">
+      <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/85 backdrop-blur-2xl">
 
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-3">
 
           <div className="flex items-center justify-between gap-4">
 
+            {/* LOGO */}
+
             <button
               onClick={goHome}
-              className="flex items-center gap-3 cursor-pointer group text-left"
+              className="group flex items-center gap-3 text-left"
             >
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-700 to-violet-600 text-xl shadow-lg shadow-indigo-600/25 text-white transition-transform group-hover:scale-105">
+              <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 text-xl text-white shadow-lg shadow-indigo-600/25 transition duration-300 group-hover:-translate-y-0.5 group-hover:shadow-xl">
                 🛍️
+
+                <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-400" />
               </div>
 
-              <div>
+              <div className="hidden xs:block">
                 <div className="flex items-center gap-1.5">
-
-                  <h1 className="text-xl font-black tracking-tight bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 bg-clip-text text-transparent">
+                  <h1 className="text-xl font-black tracking-tight text-slate-950">
                     Baiskit
                   </h1>
 
-                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-black text-indigo-700 uppercase tracking-wider">
+                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[9px] font-black tracking-wider text-indigo-700">
                     PRO
                   </span>
-
                 </div>
 
-                <p className="hidden sm:flex items-center gap-1 text-[11px] font-medium text-slate-500">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                  <span>Local price comparison</span>
+                <p className="hidden sm:flex items-center gap-1.5 text-[10px] font-semibold text-slate-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  Smart local price comparison
                 </p>
-
               </div>
             </button>
 
             {/* DESKTOP NAV */}
 
-            <div className="hidden lg:flex items-center gap-2">
+            <nav className="hidden lg:flex items-center gap-1.5">
+
+              {[
+                ["home", "Home"],
+                ["vendors", "Stores"],
+                ["orders", "Orders"]
+              ].map(([target, label]) => (
+                <button
+                  key={target}
+                  onClick={() => setPage(target)}
+                  className={`rounded-xl px-4 py-2.5 text-xs font-bold transition-all ${
+                    page === target ||
+                    (target === "vendors" &&
+                      page === "store")
+                      ? "bg-indigo-50 text-indigo-700 shadow-sm"
+                      : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
 
               <button
-                onClick={() => setPage("home")}
-                className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
-                  page === "home"
-                    ? "bg-indigo-50 text-indigo-700"
-                    : "text-slate-500 hover:bg-slate-100"
-                }`}
-              >
-                Home
-              </button>
-
-              <button
-                onClick={() => setPage("vendors")}
-                className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
-                  page === "vendors" ||
-                  page === "store"
-                    ? "bg-indigo-50 text-indigo-700"
-                    : "text-slate-500 hover:bg-slate-100"
-                }`}
-              >
-                Stores
-              </button>
-
-              <button
-                onClick={() => setPage("orders")}
-                className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
-                  page === "orders"
-                    ? "bg-indigo-50 text-indigo-700"
-                    : "text-slate-500 hover:bg-slate-100"
-                }`}
-              >
-                Orders
-              </button>
-
-              <button
-                onClick={() =>
-                  setPage("baiskit")
-                }
-                className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-slate-800 transition"
+                onClick={() => setPage("baiskit")}
+                className="ml-1 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-slate-900/10 transition hover:-translate-y-0.5 hover:bg-slate-800"
               >
                 ✨ Demand
               </button>
 
               <button
-                onClick={() =>
-                  setPage("basket")
-                }
-                className="relative rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-indigo-700 transition"
+                onClick={() => setPage("basket")}
+                className="relative ml-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-600/20 transition hover:-translate-y-0.5 hover:bg-indigo-700"
               >
                 🛒 Basket
 
-                {cart.length > 0 && (
-                  <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-black text-white">
-                    {cart.reduce(
-                      (s, i) =>
-                        s + (i.qty || 1),
-                      0
-                    )}
+                {cartCount > 0 && (
+                  <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-black text-white ring-2 ring-white">
+                    {cartCount}
                   </span>
                 )}
-
               </button>
 
-            </div>
+            </nav>
 
             {/* MOBILE DEMAND */}
 
             <button
-              onClick={() =>
-                setPage("baiskit")
-              }
-              className="lg:hidden flex items-center gap-1.5 rounded-full bg-slate-900 px-3.5 py-1.5 text-xs font-bold text-white shadow-md"
+              onClick={() => setPage("baiskit")}
+              className="lg:hidden rounded-full bg-slate-950 px-3.5 py-2 text-[11px] font-black text-white shadow-lg"
             >
               ✨ Demand
             </button>
@@ -517,10 +593,9 @@ export default function App() {
 
           {/* SEARCH */}
 
-          <div className="mt-3 relative">
+          <div className="relative mt-3">
 
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
               <svg
                 className="h-4 w-4"
                 fill="none"
@@ -534,7 +609,6 @@ export default function App() {
                   d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                 />
               </svg>
-
             </div>
 
             <input
@@ -549,7 +623,7 @@ export default function App() {
                   searchBaiskit()
                 }
               }}
-              className="w-full rounded-2xl border border-slate-200/90 bg-slate-100/70 pl-10 pr-20 py-3 text-xs font-medium text-slate-800 placeholder-slate-400 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
+              className="w-full rounded-2xl border border-slate-200/80 bg-slate-100/80 py-3.5 pl-11 pr-24 text-xs font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
             />
 
             {search && (
@@ -558,15 +632,19 @@ export default function App() {
                   onClick={searchBaiskit}
                   disabled={isLoading}
                   aria-label="Search"
-                  className="absolute inset-y-0 right-9 flex items-center pr-1 text-indigo-500 hover:text-indigo-700 transition disabled:opacity-50"
+                  className="absolute inset-y-0 right-9 flex items-center px-2 text-indigo-500 transition hover:text-indigo-700 disabled:opacity-50"
                 >
-                  🔍
+                  {isLoading ? (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
+                  ) : (
+                    "🔍"
+                  )}
                 </button>
 
                 <button
                   onClick={clearSearch}
                   aria-label="Clear search"
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 transition"
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 transition hover:text-slate-700"
                 >
                   ✕
                 </button>
@@ -576,122 +654,98 @@ export default function App() {
           </div>
 
         </div>
-
       </header>
 
-      {/* MAIN */}
+      {/* --------------------------------------------------
+          MAIN
+      -------------------------------------------------- */}
 
-      <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-5 pb-28 lg:pb-10">
+      <main className="mx-auto w-full max-w-7xl px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8 lg:pb-12">
 
         {/* ==================================================
             BASKET
         ================================================== */}
 
         {page === "basket" && (
-          <section className="animate-in fade-in duration-300 max-w-5xl mx-auto">
+          <section className="mx-auto max-w-6xl animate-in fade-in duration-300">
 
-            <div className="flex items-center justify-between mb-5">
-
-              <div>
-
-                <h2 className="text-2xl font-black tracking-tight text-slate-900">
-                  Your Basket
-                </h2>
-
-                <p className="text-xs font-medium text-slate-500">
-                  {cart.reduce(
-                    (s, i) =>
-                      s + (i.qty || 1),
-                    0
-                  )}{" "}
-                  items in your cart
-                </p>
-
-              </div>
-
-              {cart.length > 0 && (
-                <button
-                  onClick={() => setCart([])}
-                  className="text-xs font-bold text-rose-500 hover:underline"
-                >
-                  Clear All
-                </button>
-              )}
-
-            </div>
+            <SectionTitle
+              eyebrow="Shopping bag"
+              title="Your Basket"
+              description={`${cartCount} ${
+                cartCount === 1 ? "item" : "items"
+              } ready for checkout`}
+              action={
+                cart.length > 0 && (
+                  <button
+                    onClick={() => setCart([])}
+                    className="self-start rounded-xl px-3 py-2 text-xs font-bold text-rose-500 transition hover:bg-rose-50"
+                  >
+                    Clear All
+                  </button>
+                )
+              }
+            />
 
             {cart.length === 0 ? (
-
-              <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-10 text-center shadow-sm">
-
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-indigo-50 text-3xl">
+              <div className="mt-6 overflow-hidden rounded-[28px] border border-slate-200/80 bg-white p-10 text-center shadow-sm">
+                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[26px] bg-gradient-to-br from-indigo-50 to-violet-100 text-4xl">
                   🛒
                 </div>
 
-                <h3 className="text-base font-bold text-slate-800">
+                <h3 className="mt-5 text-lg font-black text-slate-900">
                   Your basket is empty
                 </h3>
 
-                <p className="mt-1 text-xs text-slate-500">
-                  Discover great deals from verified local stores around you.
+                <p className="mx-auto mt-2 max-w-sm text-xs leading-relaxed text-slate-500">
+                  Discover great deals from online marketplaces and verified local stores around you.
                 </p>
 
                 <button
-                  onClick={() =>
-                    setPage("home")
-                  }
-                  className="mt-5 rounded-2xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-600/25"
+                  onClick={() => setPage("home")}
+                  className="mt-6 rounded-2xl bg-indigo-600 px-6 py-3 text-xs font-black text-white shadow-lg shadow-indigo-600/20 transition hover:-translate-y-0.5 hover:bg-indigo-700"
                 >
                   Browse Products
                 </button>
-
               </div>
-
             ) : (
-
-              <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5">
+              <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[1fr_380px]">
 
                 <div className="space-y-3">
-
                   {cart.map((item) => (
-
                     <div
                       key={item.id}
-                      className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-sm"
+                      className="group flex items-center justify-between gap-3 rounded-3xl border border-slate-200/80 bg-white p-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                     >
-
-                      <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex min-w-0 items-center gap-3">
 
                         <img
                           src={item.image}
                           alt={item.name}
-                          className="h-16 w-16 rounded-xl object-cover border border-slate-100 shrink-0"
+                          className="h-16 w-16 shrink-0 rounded-2xl border border-slate-100 object-cover"
                         />
 
                         <div className="min-w-0">
-
-                          <h4 className="text-xs font-bold text-slate-900 line-clamp-1">
+                          <h4 className="line-clamp-1 text-xs font-black text-slate-900">
                             {item.name}
                           </h4>
 
-                          <p className="text-[11px] text-slate-500">
+                          <p className="mt-0.5 text-[11px] text-slate-500">
                             {item.vendor}
                           </p>
 
-                          <p className="mt-1 text-xs font-black text-indigo-600">
+                          <p className="mt-1.5 text-sm font-black text-indigo-600">
                             ₹
                             {(item.price || 0) *
                               (item.qty || 1)}
                           </p>
-
                         </div>
 
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex shrink-0 items-center gap-2">
 
-                        <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-1.5 py-1">
-
+                        <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1">
                           <button
                             onClick={() =>
                               updateCartQty(
@@ -699,12 +753,12 @@ export default function App() {
                                 -1
                               )
                             }
-                            className="h-6 w-6 rounded-lg bg-white text-xs font-bold text-slate-700 shadow-sm"
+                            className="h-7 w-7 rounded-lg bg-white text-xs font-black text-slate-700 shadow-sm transition hover:bg-slate-100"
                           >
-                            -
+                            −
                           </button>
 
-                          <span className="w-7 text-center text-xs font-black text-slate-800">
+                          <span className="w-8 text-center text-xs font-black text-slate-800">
                             {item.qty || 1}
                           </span>
 
@@ -715,136 +769,119 @@ export default function App() {
                                 1
                               )
                             }
-                            className="h-6 w-6 rounded-lg bg-white text-xs font-bold text-slate-700 shadow-sm"
+                            className="h-7 w-7 rounded-lg bg-white text-xs font-black text-slate-700 shadow-sm transition hover:bg-slate-100"
                           >
                             +
                           </button>
-
                         </div>
 
                         <button
                           onClick={() =>
                             removeItem(item.id)
                           }
-                          className="p-1.5 text-slate-400 hover:text-rose-500"
+                          className="rounded-xl p-2 text-slate-300 transition hover:bg-rose-50 hover:text-rose-500"
                         >
                           ✕
                         </button>
 
                       </div>
-
                     </div>
-
                   ))}
-
                 </div>
 
                 <div className="space-y-4">
 
-                  <div className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm flex gap-2">
+                  <div className="rounded-3xl border border-slate-200/80 bg-white p-3 shadow-sm">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Voucher: BAISKIT20"
+                        value={promoCode}
+                        onChange={(e) =>
+                          setPromoCode(
+                            e.target.value
+                          )
+                        }
+                        className="min-w-0 flex-1 rounded-2xl bg-slate-50 px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/10"
+                      />
 
-                    <input
-                      type="text"
-                      placeholder="Voucher: BAISKIT20"
-                      value={promoCode}
-                      onChange={(e) =>
-                        setPromoCode(
-                          e.target.value
-                        )
-                      }
-                      className="flex-1 rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-800 outline-none"
-                    />
-
-                    <button
-                      onClick={applyPromo}
-                      className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white"
-                    >
-                      Apply
-                    </button>
-
+                      <button
+                        onClick={applyPromo}
+                        className="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-slate-800"
+                      >
+                        Apply
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-2.5">
+                  <div className="rounded-[28px] border border-slate-200/80 bg-white p-5 shadow-sm">
 
-                    <div className="flex justify-between text-xs text-slate-500">
+                    <div className="space-y-3">
 
-                      <span>
-                        Subtotal
-                      </span>
-
-                      <span className="font-bold text-slate-800">
-                        ₹{subtotal}
-                      </span>
-
-                    </div>
-
-                    {discountAmount > 0 && (
-                      <div className="flex justify-between text-xs text-emerald-600">
-
-                        <span>
-                          Voucher Discount
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span>Subtotal</span>
+                        <span className="font-bold text-slate-800">
+                          ₹{subtotal}
                         </span>
-
-                        <span className="font-bold">
-                          -₹
-                          {Math.round(
-                            discountAmount
-                          )}
-                        </span>
-
                       </div>
-                    )}
 
-                    <div className="flex justify-between text-xs text-slate-500">
+                      {discountAmount > 0 && (
+                        <div className="flex justify-between text-xs text-emerald-600">
+                          <span>Voucher Discount</span>
+                          <span className="font-bold">
+                            -₹
+                            {Math.round(
+                              discountAmount
+                            )}
+                          </span>
+                        </div>
+                      )}
 
-                      <span>
-                        Delivery
-                      </span>
-
-                      <span className="font-bold text-emerald-600">
-                        FREE
-                      </span>
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span>Delivery</span>
+                        <span className="font-black text-emerald-600">
+                          FREE
+                        </span>
+                      </div>
 
                     </div>
 
-                    <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
+                    <div className="my-4 border-t border-dashed border-slate-200" />
 
+                    <div className="flex items-end justify-between">
                       <div>
-
                         <p className="text-xs font-black text-slate-900">
                           Total Payable
                         </p>
 
-                        <p className="text-[10px] text-slate-400">
-                          Taxes Included
+                        <p className="mt-0.5 text-[10px] text-slate-400">
+                          Taxes included
                         </p>
-
                       </div>
 
-                      <span className="text-xl font-black text-indigo-600">
+                      <span className="text-2xl font-black text-indigo-600">
                         ₹
                         {Math.round(
                           grandTotal
                         )}
                       </span>
-
                     </div>
 
                     <button
                       onClick={placeOrder}
-                      className="w-full mt-2 rounded-2xl bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-900 py-3.5 text-xs font-black text-white shadow-xl"
+                      className="mt-5 w-full rounded-2xl bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-900 py-3.5 text-xs font-black text-white shadow-xl shadow-indigo-950/10 transition hover:-translate-y-0.5"
                     >
                       Proceed to 1-Tap Checkout ⚡
                     </button>
 
+                    <p className="mt-3 text-center text-[9px] font-semibold text-slate-400">
+                      Secure checkout • Free delivery
+                    </p>
+
                   </div>
-
                 </div>
-
               </div>
-
             )}
-
           </section>
         )}
 
@@ -853,331 +890,563 @@ export default function App() {
         ================================================== */}
 
         {page === "baiskit" && (
-          <section className="animate-in fade-in duration-300 max-w-5xl mx-auto">
+          <section className="mx-auto max-w-5xl animate-in fade-in duration-300">
 
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-950 via-slate-900 to-violet-950 p-6 text-white shadow-xl">
+            <div className="relative overflow-hidden rounded-[30px] bg-gradient-to-br from-indigo-950 via-slate-950 to-violet-950 p-6 sm:p-8 text-white shadow-2xl shadow-indigo-950/10">
 
-              <span className="rounded-full bg-indigo-500/20 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-indigo-300 border border-indigo-500/30">
-                Reverse Marketplace
-              </span>
+              <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-violet-500/20 blur-3xl" />
+              <div className="absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-indigo-500/20 blur-3xl" />
 
-              <h2 className="mt-3 text-2xl font-black tracking-tight">
-                Create a Baiskit Demand
-              </h2>
+              <div className="relative">
+                <span className="inline-flex rounded-full border border-indigo-400/20 bg-white/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-indigo-200 backdrop-blur">
+                  Reverse Marketplace
+                </span>
 
-              <p className="mt-1 text-xs text-slate-300 leading-relaxed max-w-2xl">
-                Tell nearby sellers your exact budget. Verified local shops can compete to fulfill your order.
-              </p>
+                <h2 className="mt-4 text-2xl sm:text-3xl font-black tracking-tight">
+                  Create a Baiskit Demand
+                </h2>
 
+                <p className="mt-2 max-w-2xl text-xs sm:text-sm leading-relaxed text-slate-300">
+                  Tell nearby sellers exactly what you need and your target budget. Local shops can compete to fulfill your order.
+                </p>
+              </div>
             </div>
 
-            <div className="mt-5 rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
+            <div className="mt-5 rounded-[28px] border border-slate-200/80 bg-white p-5 sm:p-6 shadow-sm">
 
-              <div>
+              <div className="space-y-5">
 
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                  What item do you want?
-                </label>
-
-                <input
-                  type="text"
-                  placeholder="e.g. Wireless Earbuds, Study Desk..."
-                  value={request}
-                  onChange={(e) =>
-                    setRequest(
-                      e.target.value
-                    )
-                  }
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white"
-                />
-
-              </div>
-
-              <div>
-
-                <div className="flex justify-between items-center mb-1.5">
-
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                    Max Target Budget (₹)
+                <div>
+                  <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+                    What item do you want?
                   </label>
 
-                  <span className="text-[10px] font-bold text-indigo-600">
-                    Smart Price AI
-                  </span>
-
+                  <input
+                    type="text"
+                    placeholder="e.g. Wireless Earbuds, Study Desk..."
+                    value={request}
+                    onChange={(e) =>
+                      setRequest(
+                        e.target.value
+                      )
+                    }
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-xs font-semibold text-slate-800 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
+                  />
                 </div>
 
-                <input
-                  type="number"
-                  placeholder="e.g. 1500"
-                  value={budget}
-                  onChange={(e) =>
-                    setBudget(
-                      e.target.value
-                    )
-                  }
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white"
-                />
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+                      Maximum Target Budget
+                    </label>
 
-                <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-
-                  {[
-                    "1000",
-                    "1500",
-                    "2000",
-                    "3000"
-                  ].map((amt) => (
-                    <button
-                      key={amt}
-                      type="button"
-                      onClick={() =>
-                        setBudget(amt)
-                      }
-                      className={`rounded-xl px-3 py-1 text-xs font-bold transition ${
-                        budget === amt
-                          ? "bg-indigo-600 text-white"
-                          : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      ₹{amt}
-                    </button>
-                  ))}
-
-                </div>
-
-              </div>
-
-              <div>
-
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                  Quantity Required
-                </label>
-
-                <div className="flex items-center gap-3">
-
-                  <div className="flex items-center rounded-2xl border border-slate-200 bg-slate-50 p-1">
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setQuantity(
-                          Math.max(
-                            1,
-                            quantity - 1
-                          )
-                        )
-                      }
-                      className="h-8 w-8 rounded-xl bg-white font-bold text-slate-700 shadow-sm"
-                    >
-                      -
-                    </button>
-
-                    <span className="w-10 text-center font-black text-slate-800 text-xs">
-                      {quantity}
+                    <span className="rounded-full bg-indigo-50 px-2 py-1 text-[9px] font-black text-indigo-600">
+                      SMART PRICE AI
                     </span>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setQuantity(
-                          quantity + 1
-                        )
-                      }
-                      className="h-8 w-8 rounded-xl bg-white font-bold text-slate-700 shadow-sm"
-                    >
-                      +
-                    </button>
-
                   </div>
 
-                  <span className="text-[11px] text-slate-400">
-                    1 unit = Standard warranty
-                  </span>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">
+                      ₹
+                    </span>
 
+                    <input
+                      type="number"
+                      placeholder="e.g. 1500"
+                      value={budget}
+                      onChange={(e) =>
+                        setBudget(
+                          e.target.value
+                        )
+                      }
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-8 pr-4 text-xs font-bold text-slate-800 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
+                    />
+                  </div>
+
+                  <div className="mt-2.5 flex gap-2 overflow-x-auto pb-1">
+                    {[
+                      "1000",
+                      "1500",
+                      "2000",
+                      "3000"
+                    ].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() =>
+                          setBudget(amt)
+                        }
+                        className={`rounded-xl px-3 py-2 text-[10px] font-black transition ${
+                          budget === amt
+                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
+                      >
+                        ₹{amt}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
+                <div>
+                  <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+                    Quantity Required
+                  </label>
+
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setQuantity(
+                            Math.max(
+                              1,
+                              quantity - 1
+                            )
+                          )
+                        }
+                        className="h-8 w-8 rounded-xl bg-white font-black text-slate-700 shadow-sm"
+                      >
+                        −
+                      </button>
+
+                      <span className="w-10 text-center text-xs font-black text-slate-800">
+                        {quantity}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setQuantity(
+                            quantity + 1
+                          )
+                        }
+                        className="h-8 w-8 rounded-xl bg-white font-black text-slate-700 shadow-sm"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <span className="text-[10px] text-slate-400">
+                      Standard warranty
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={findMatches}
+                  className="w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 py-3.5 text-xs font-black text-white shadow-lg shadow-indigo-600/20 transition hover:-translate-y-0.5 hover:shadow-xl"
+                >
+                  Find Matched Sellers ✨
+                </button>
+
               </div>
-
-              <button
-                onClick={findMatches}
-                className="w-full mt-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 py-3.5 text-xs font-black text-white shadow-lg"
-              >
-                Find Matched Sellers ✨
-              </button>
-
             </div>
 
             {matches.length > 0 && (
+              <div className="mt-7 space-y-3">
 
-              <div className="mt-6 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.15em] text-indigo-600">
+                      Seller Matches
+                    </p>
 
-                <div className="flex justify-between items-center">
+                    <h3 className="mt-0.5 text-lg font-black text-slate-900">
+                      {matches.length} Verified Offers
+                    </h3>
+                  </div>
 
-                  <h3 className="text-sm font-black text-slate-900">
-                    Found{" "}
-                    {matches.length}{" "}
-                    Verified Offers
-                  </h3>
-
-                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
-                    Within Budget
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[9px] font-black text-emerald-700">
+                    WITHIN BUDGET
                   </span>
-
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {matches.map((seller) => (
+                    <div
+                      key={seller.id}
+                      className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                    >
 
-                  {matches.map(
-                    (seller) => (
+                      <div className="flex items-start justify-between gap-3">
 
-                      <div
-                        key={seller.id}
-                        className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm"
-                      >
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="text-xs font-black text-slate-900">
+                              {seller.name}
+                            </h4>
 
-                        <div className="flex justify-between items-start">
-
-                          <div>
-
-                            <div className="flex items-center gap-1.5">
-
-                              <h4 className="font-black text-xs text-slate-900">
-                                {seller.name}
-                              </h4>
-
-                              {seller.verified && (
-                                <span className="h-3.5 w-3.5 rounded-full bg-blue-500 text-[8px] text-white flex items-center justify-center font-bold">
-                                  ✓
-                                </span>
-                              )}
-
-                            </div>
-
-                            <p className="text-[11px] text-slate-500 mt-0.5">
-                              {seller.type} •{" "}
-                              {seller.distance}
-                            </p>
-
+                            {seller.verified && (
+                              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[8px] font-black text-white">
+                                ✓
+                              </span>
+                            )}
                           </div>
 
-                          <span className="text-xs font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-lg">
-                            ⭐{" "}
-                            {seller.rating}
-                          </span>
-
+                          <p className="mt-1 text-[10px] text-slate-500">
+                            {seller.type} •{" "}
+                            {seller.distance}
+                          </p>
                         </div>
 
-                        <div className="mt-3 border-t border-slate-100 pt-3 flex justify-between items-center">
-
-                          <div>
-
-                            <p className="text-[10px] uppercase font-bold text-slate-400">
-                              Offer Price
-                            </p>
-
-                            <p className="text-lg font-black text-indigo-600">
-                              ₹{seller.price}
-                            </p>
-
-                          </div>
-
-                          <div className="flex gap-2">
-
-                            <button
-                              onClick={() => {
-                                setSelectedVendor(
-                                  seller.name
-                                )
-                                setPage(
-                                  "store"
-                                )
-                              }}
-                              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700"
-                            >
-                              Visit Store
-                            </button>
-
-                            <button
-                              onClick={() =>
-                                showToast(
-                                  `Connecting to ${seller.name}...`
-                                )
-                              }
-                              className="rounded-xl bg-slate-900 px-3.5 py-1.5 text-xs font-bold text-white"
-                            >
-                              Lock Deal
-                            </button>
-
-                          </div>
-
-                        </div>
-
+                        <span className="rounded-xl bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-600">
+                          ⭐ {seller.rating}
+                        </span>
                       </div>
 
-                    )
-                  )}
+                      <div className="mt-4 flex items-end justify-between border-t border-slate-100 pt-3">
 
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                            Offer Price
+                          </p>
+
+                          <p className="mt-0.5 text-xl font-black text-indigo-600">
+                            ₹{seller.price}
+                          </p>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedVendor(
+                                seller.name
+                              )
+                              setPage("store")
+                            }}
+                            className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black text-slate-700 transition hover:bg-slate-100"
+                          >
+                            Visit Store
+                          </button>
+
+                          <button
+                            onClick={() =>
+                              showToast(
+                                `Connecting to ${seller.name}...`
+                              )
+                            }
+                            className="rounded-xl bg-slate-950 px-3.5 py-2 text-[10px] font-black text-white transition hover:bg-slate-800"
+                          >
+                            Lock Deal
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-
               </div>
-
             )}
-
           </section>
         )}
 
         {/* ==================================================
-    VENDORS
+            VENDORS
+        ================================================== */}
+
+        {page === "vendors" && (
+          <section className="mx-auto max-w-6xl animate-in fade-in duration-300">
+
+            <SectionTitle
+              eyebrow="Local discovery"
+              title="Nearby Stores 🏪"
+              description="Real physical stores found near your location"
+            />
+
+            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+
+              {apiResults?.nearbyVendors?.length > 0 ? (
+                apiResults.nearbyVendors.map(
+                  (vendor, index) => (
+                    <VendorCard
+                      key={
+                        vendor.id ||
+                        `${vendor.name}-${index}`
+                      }
+                      name={vendor.name}
+                      type={
+                        vendor.type ||
+                        "Local Store"
+                      }
+                      distance={vendor.distance}
+                      rating={vendor.rating}
+                      totalRatings={
+                        vendor.totalRatings
+                      }
+                      address={vendor.address}
+                      openNow={vendor.openNow}
+                      onView={() => {
+                        if (vendor.mapsUrl) {
+                          window.open(
+                            vendor.mapsUrl,
+                            "_blank",
+                            "noopener,noreferrer"
+                          )
+                        }
+                      }}
+                    />
+                  )
+                )
+              ) : (
+                <div className="col-span-full rounded-[28px] border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
+
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 text-3xl">
+                    🏪
+                  </div>
+
+                  <p className="mt-4 text-sm font-black text-slate-800">
+                    No nearby stores found
+                  </p>
+
+                  <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-slate-400">
+                    Allow location access and Baiskit will search the nearby area for physical stores.
+                  </p>
+                </div>
+              )}
+
+            </div>
+          </section>
+        )}
+
+        {/* ==================================================
+    STORE
 ================================================== */}
 
-{page === "vendors" && (
-  <section className="animate-in fade-in duration-300 max-w-6xl mx-auto">
+{page === "store" && (
+  <section className="mx-auto max-w-4xl animate-in fade-in duration-300">
 
-    <div className="mb-5">
-      <h2 className="text-2xl font-black tracking-tight text-slate-900">
-        Nearby Stores 🏪
-      </h2>
+    <button
+      onClick={() => setPage("vendors")}
+      className="mb-5 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-black text-slate-700 shadow-sm transition hover:-translate-x-0.5"
+    >
+      ← Back to Stores
+    </button>
 
-      <p className="text-xs text-slate-500 mt-0.5">
-        Real physical stores found near your location
-      </p>
-    </div>
+    <div className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-white shadow-sm">
 
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+      {/* STORE HEADER */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-indigo-950 via-slate-950 to-violet-950 p-6 text-white sm:p-8">
 
-      {apiResults?.nearbyVendors?.length > 0 ? (
-        apiResults.nearbyVendors.map((vendor, index) => (
-          <VendorCard
-            key={vendor.id || `${vendor.name}-${index}`}
-            name={vendor.name}
-            type={vendor.type || "Local Store"}
-            distance={vendor.distance}
-            rating={vendor.rating}
-            totalRatings={vendor.totalRatings}
-address={vendor.address}
-openNow={vendor.openNow}
-            onView={() => {
-              if (vendor.mapsUrl) {
-                window.open(
-                  vendor.mapsUrl,
-                  "_blank",
-                  "noopener,noreferrer"
-                )
-              }
-            }}
-          />
-        ))
-      ) : (
-        <div className="col-span-full rounded-2xl border border-slate-200 bg-white p-8 text-center">
-          <p className="text-sm font-bold text-slate-700">
-            No nearby stores found
+        <div className="absolute -right-16 -top-20 h-48 w-48 rounded-full bg-indigo-500/20 blur-3xl" />
+
+        <div className="relative flex items-start justify-between gap-4">
+
+          <div className="min-w-0">
+
+            <div className="flex items-center gap-2">
+
+              <h2 className="truncate text-xl font-black sm:text-2xl">
+                {currentStore?.name ||
+                  selectedVendor ||
+                  "Local Store"}
+              </h2>
+
+              {currentStore && (
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 text-[9px] font-black text-white">
+                  ✓
+                </span>
+              )}
+
+            </div>
+
+            {/* ADDRESS */}
+            <p className="mt-2 text-xs leading-relaxed text-slate-300">
+              📍{" "}
+              {currentStore?.address ||
+                "Local store near your selected area"}
+            </p>
+
+            {/* REAL STORE STATUS */}
+            <div className="mt-4 flex flex-wrap gap-2">
+
+              {currentStore?.openNow !== null &&
+                currentStore?.openNow !== undefined && (
+                  <span
+                    className={`rounded-lg border px-2.5 py-1 text-[9px] font-black ${
+                      currentStore.openNow
+                        ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
+                        : "border-red-400/20 bg-red-400/10 text-red-300"
+                    }`}
+                  >
+                    ●{" "}
+                    {currentStore.openNow
+                      ? "Open Now"
+                      : "Closed"}
+                  </span>
+                )}
+
+              {/* REAL GOOGLE RATING */}
+              {currentStore?.rating !== null &&
+                currentStore?.rating !== undefined && (
+                  <span className="rounded-lg border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[9px] font-black text-amber-300">
+                    ⭐ {currentStore.rating} Rating
+                  </span>
+                )}
+
+            </div>
+
+          </div>
+
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-2xl backdrop-blur">
+            🏪
+          </div>
+
+        </div>
+      </div>
+
+      {/* STORE CONTENT */}
+      <div className="p-6">
+
+        <div>
+
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
+            Store Information
           </p>
 
-          <p className="text-xs text-slate-400 mt-1">
-            Search for a product first to find nearby physical stores.
+          <p className="mt-2 text-xs leading-relaxed text-slate-600">
+            {currentStore?.name
+              ? "Store information provided through Google Maps. Availability and pricing may vary."
+              : "Local store information is currently unavailable."}
+          </p>
+
+
+
+        </div>
+
+        {/* STORE DETAILS */}
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+
+          {/* RATING */}
+          {currentStore?.rating !== null &&
+            currentStore?.rating !== undefined && (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                  Rating
+                </p>
+
+                <p className="mt-1 text-lg font-black text-slate-900">
+                  ⭐ {currentStore.rating}
+                </p>
+              </div>
+            )}
+
+          {/* DISTANCE */}
+          {currentStore?.distance !== null &&
+            currentStore?.distance !== undefined && (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                  Distance
+                </p>
+
+                <p className="mt-1 text-lg font-black text-slate-900">
+                  {currentStore.distance} km
+                </p>
+              </div>
+            )}
+
+            {/* STORE PRICE LISTINGS */}
+<div className="mt-8">
+
+  <div className="mb-4">
+    <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
+      Products & Prices
+    </p>
+
+    <p className="mt-1 text-xs text-slate-500">
+      Products currently available through Baiskit.
+    </p>
+  </div>
+
+  {(() => {
+    const storeListings =
+      apiResults?.priceResults?.filter(
+        (item) =>
+          item.seller === selectedVendor ||
+          item.platform === selectedVendor
+      ) || []
+
+    if (!storeListings.length) {
+      return (
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+          <p className="text-sm font-bold text-slate-700">
+            No products found for this store
+          </p>
+
+          <p className="mt-1 text-xs text-slate-400">
+            Search for a product to see available prices here.
           </p>
         </div>
-      )}
+      )
+    }
+
+    return (
+      <div className="space-y-3">
+        {storeListings.map((item, index) => (
+          <div
+            key={`${item.product}-${index}`}
+            className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          >
+
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black text-slate-800">
+                {item.product}
+              </p>
+
+              <p className="mt-1 text-[10px] font-bold text-slate-400">
+                {item.condition || "Brand New"}
+              </p>
+            </div>
+
+            <div className="shrink-0 text-right">
+              <p className="text-lg font-black text-indigo-600">
+                ₹{Number(item.price).toLocaleString("en-IN")}
+              </p>
+
+              {item.distance != null && (
+                <p className="mt-1 text-[10px] text-slate-400">
+                  {item.distance} km away
+                </p>
+              )}
+            </div>
+
+          </div>
+        ))}
+      </div>
+    )
+  })()}
+
+</div>
+
+        </div>
+
+        {/* ACTIONS */}
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+
+          {/* GOOGLE MAPS */}
+          {currentStore?.mapsUrl && (
+            <a
+              href={currentStore.mapsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-2xl bg-indigo-600 py-3 text-center text-xs font-black text-white transition hover:bg-indigo-700"
+            >
+              📍 View on Google Maps
+            </a>
+          )}
+
+          {/* MESSAGE */}
+          <button
+            onClick={() =>
+              showToast("Opening Live Chat...")
+            }
+            className="rounded-2xl bg-slate-950 py-3 text-xs font-black text-white transition hover:bg-slate-800"
+          >
+            💬 Message
+          </button>
+
+        </div>
+
+      </div>
 
     </div>
 
@@ -1185,174 +1454,51 @@ openNow={vendor.openNow}
 )}
 
         {/* ==================================================
-            STORE
-        ================================================== */}
-
-        {page === "store" && (
-          <section className="animate-in fade-in duration-300 max-w-4xl mx-auto">
-
-            <button
-              onClick={() =>
-                setPage("vendors")
-              }
-              className="mb-4 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm"
-            >
-              ← Back to Stores
-            </button>
-
-            <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm">
-
-              <div className="flex justify-between items-start">
-
-                <div>
-
-                  <div className="flex items-center gap-2">
-
-                    <h2 className="text-xl font-black text-slate-900">
-                      {selectedVendor ||
-                        "Local Merchant"}
-                    </h2>
-
-                    <span className="h-4 w-4 rounded-full bg-blue-600 text-[9px] text-white flex items-center justify-center font-bold">
-                      ✓
-                    </span>
-
-                  </div>
-
-                  <p className="text-xs text-slate-500 mt-1">
-                    📍 Local verified merchant
-                  </p>
-
-                  <div className="mt-2 flex gap-2">
-
-                    <span className="rounded-lg bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-                      ● Open Now
-                    </span>
-
-                    <span className="rounded-lg bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-                      ⭐ 4.8 Rating
-                    </span>
-
-                  </div>
-
-                </div>
-
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-2xl">
-                  🏪
-                </div>
-
-              </div>
-
-              <div className="mt-5 border-t border-slate-100 pt-4">
-
-                <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  About Merchant
-                </h4>
-
-                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                  Verified local merchant available through Baiskit.
-                  Product availability and pricing may vary.
-                </p>
-
-              </div>
-
-              <div className="mt-5 grid grid-cols-2 gap-2.5">
-
-                <button
-                  onClick={() =>
-                    showToast(
-                      `Calling ${
-                        selectedVendor ||
-                        "store"
-                      }...`
-                    )
-                  }
-                  className="rounded-2xl border border-slate-200 bg-slate-50 py-2.5 text-xs font-bold text-slate-700"
-                >
-                  📞 Call Store
-                </button>
-
-                <button
-                  onClick={() =>
-                    showToast(
-                      "Opening Live Chat..."
-                    )
-                  }
-                  className="rounded-2xl bg-slate-900 py-2.5 text-xs font-bold text-white"
-                >
-                  💬 Message
-                </button>
-
-              </div>
-
-            </div>
-
-          </section>
-        )}
-
-        {/* ==================================================
             ORDERS
         ================================================== */}
 
         {page === "orders" && (
-          <section className="animate-in fade-in duration-300 max-w-5xl mx-auto">
+          <section className="mx-auto max-w-5xl animate-in fade-in duration-300">
 
-            <div className="mb-5">
-
-              <h2 className="text-2xl font-black tracking-tight text-slate-900">
-                Your Orders 📦
-              </h2>
-
-              <p className="text-xs text-slate-500 mt-0.5">
-                Order status & receipt history
-              </p>
-
-            </div>
+            <SectionTitle
+              eyebrow="Purchase history"
+              title="Your Orders 📦"
+              description="Order status and receipt history"
+            />
 
             {orders.length === 0 ? (
+              <div className="mt-6 rounded-[28px] border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
 
-              <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-8 text-center shadow-sm">
-
-                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-3xl">
                   📦
                 </div>
 
-                <h3 className="font-bold text-slate-800 text-sm">
+                <h3 className="mt-4 text-sm font-black text-slate-800">
                   No Orders Placed Yet
                 </h3>
 
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-slate-400">
                   When you checkout, your delivery updates will appear here.
                 </p>
 
                 <button
-                  onClick={() =>
-                    setPage("home")
-                  }
-                  className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white"
+                  onClick={() => setPage("home")}
+                  className="mt-5 rounded-xl bg-slate-950 px-5 py-2.5 text-xs font-black text-white transition hover:bg-slate-800"
                 >
                   Start Shopping
                 </button>
 
               </div>
-
             ) : (
-
-              <div className="space-y-3.5">
-
-                {orders.map(
-                  (order) => (
-                    <OrderCard
-                      key={order.id}
-                      order={order}
-                    />
-                  )
-                )}
-
+              <div className="mt-6 space-y-4">
+                {orders.map((order) => (
+                  <OrderCard
+                    key={order.id}
+                    order={order}
+                  />
+                ))}
               </div>
-
             )}
-
           </section>
         )}
 
@@ -1361,211 +1507,293 @@ openNow={vendor.openNow}
         ================================================== */}
 
         {page === "home" && (
+          <div className="animate-in fade-in duration-300">
 
-          <div className="animate-in fade-in duration-300 space-y-6">
+            {/* HERO WHEN NO SEARCH */}
+
+            {!apiResults && !isLoading && (
+              <section className="relative mb-8 overflow-hidden rounded-[30px] bg-gradient-to-br from-indigo-950 via-slate-950 to-violet-950 p-6 sm:p-8 lg:p-10 text-white shadow-2xl shadow-indigo-950/10">
+
+                <div className="absolute right-[-80px] top-[-90px] h-72 w-72 rounded-full bg-indigo-500/20 blur-3xl" />
+                <div className="absolute bottom-[-100px] left-[-50px] h-64 w-64 rounded-full bg-violet-500/20 blur-3xl" />
+
+                <div className="relative max-w-2xl">
+
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-indigo-200 backdrop-blur">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    Live price intelligence
+                  </span>
+
+                  <h2 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-black leading-[1.05] tracking-tight">
+                    Find the
+                    <span className="block bg-gradient-to-r from-indigo-300 via-violet-300 to-fuchsia-300 bg-clip-text text-transparent">
+                      best price.
+                    </span>
+                  </h2>
+
+                  <p className="mt-4 max-w-xl text-xs sm:text-sm leading-relaxed text-slate-300">
+                    Compare online offers, Baiskit listings and nearby physical stores from one search.
+                  </p>
+
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {[
+                      "🌐 Online",
+                      "🏪 Local",
+                      "♻️ Second-Hand"
+                    ].map((item) => (
+                      <span
+                        key={item}
+                        className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-bold text-slate-200 backdrop-blur"
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+
+                </div>
+              </section>
+            )}
 
             {/* LOADING */}
 
             {isLoading && (
-              <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-100 text-center text-xs font-bold text-indigo-700 animate-pulse">
-                🔍 Searching online prices, Baiskit listings & nearby stores...
-              </div>
+              <section className="mb-6 overflow-hidden rounded-[28px] border border-indigo-100 bg-white shadow-sm">
+
+                <div className="flex items-center gap-4 bg-gradient-to-r from-indigo-50 to-violet-50 p-5">
+
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm">
+                    <span className="h-5 w-5 animate-spin rounded-full border-[3px] border-indigo-100 border-t-indigo-600" />
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-black text-slate-900">
+                      Comparing prices...
+                    </p>
+
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Checking online offers, Baiskit listings and nearby stores
+                    </p>
+                  </div>
+
+                </div>
+
+                <div className="space-y-3 p-5">
+                  <div className="h-3 animate-pulse rounded-full bg-slate-100" />
+                  <div className="h-3 w-4/5 animate-pulse rounded-full bg-slate-100" />
+                  <div className="h-3 w-3/5 animate-pulse rounded-full bg-slate-100" />
+                </div>
+
+              </section>
             )}
 
             {/* ==================================================
                 PRICE COMPARISON
             ================================================== */}
 
-            {apiResults && (
+            {!isLoading && apiResults && (
+              <section className="space-y-5">
 
-              <section className="rounded-3xl border border-indigo-100 bg-gradient-to-b from-indigo-50/50 to-white p-4 sm:p-5 shadow-sm space-y-4">
+                {/* COMPARISON HEADER */}
 
-                {/* HEADER */}
-
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
 
                   <div>
-
-                    <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
-
-                      <span>
-                        Baiskit Price Match
-                      </span>
-
-                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
-                        LIVE
-                      </span>
-
-                    </h2>
-
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {apiResults.totalPriceResults ??
-                        0}{" "}
-                      price results for "
-                      {search}"
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-indigo-600">
+                      Live comparison
                     </p>
 
+                    <h2 className="mt-1 text-2xl sm:text-3xl font-black tracking-tight text-slate-950">
+                      Price Match
+                    </h2>
+
+                    <p className="mt-1 text-xs text-slate-500">
+                      {apiResults.totalPriceResults ?? 0} available offers for{" "}
+                      <span className="font-bold text-slate-700">
+                        "{search}"
+                      </span>
+                    </p>
                   </div>
 
                   <button
                     onClick={() =>
                       setApiResults(null)
                     }
-                    className="self-start sm:self-auto shrink-0 text-xs font-bold text-slate-400 hover:text-slate-600 bg-white border border-slate-200 px-2.5 py-1 rounded-xl"
+                    className="self-start rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-800"
                   >
-                    ✕ Close
+                    ✕ Close Results
                   </button>
 
                 </div>
 
-                {/* RESULT COUNTS */}
+                {/* COUNTS */}
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
 
-                  <div className="rounded-2xl bg-white border border-slate-200 p-3 text-center shadow-sm">
+                  {[
+                    [
+                      apiResults.onlineCount ?? 0,
+                      "Online",
+                      "bg-blue-50 text-blue-600",
+                      "🌐"
+                    ],
+                    [
+                      apiResults.localCount ?? 0,
+                      "Local",
+                      "bg-indigo-50 text-indigo-600",
+                      "🏪"
+                    ],
+                    [
+                      apiResults.secondHandCount ?? 0,
+                      "Second-Hand",
+                      "bg-emerald-50 text-emerald-600",
+                      "♻️"
+                    ]
+                  ].map(
+                    ([count, label, style, icon]) => (
+                      <div
+                        key={label}
+                        className="rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-sm"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs ${style}`}
+                          >
+                            {icon}
+                          </span>
 
-                    <p className="text-lg font-black text-blue-600">
-                      {apiResults.onlineCount ??
-                        0}
-                    </p>
+                          <span className="text-lg font-black text-slate-900">
+                            {count}
+                          </span>
+                        </div>
 
-                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                      Online
-                    </p>
-
-                  </div>
-
-                  <div className="rounded-2xl bg-white border border-slate-200 p-3 text-center shadow-sm">
-
-                    <p className="text-lg font-black text-indigo-600">
-                      {apiResults.localCount ??
-                        0}
-                    </p>
-
-                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                      Local
-                    </p>
-
-                  </div>
-
-                  <div className="rounded-2xl bg-white border border-slate-200 p-3 text-center shadow-sm">
-
-                    <p className="text-lg font-black text-emerald-600">
-                      {apiResults.secondHandCount ??
-                        0}
-                    </p>
-
-                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                      Second-Hand
-                    </p>
-
-                  </div>
+                        <p className="mt-2 text-[9px] font-black uppercase tracking-wider text-slate-400">
+                          {label}
+                        </p>
+                      </div>
+                    )
+                  )}
 
                 </div>
 
-               {/* LOWEST OVERALL */}
+                {/* LOWEST OVERALL */}
 
-{apiResults.comparison?.lowestOverall && (() => {
-  const deal = apiResults.comparison.lowestOverall
-  const isOnline = deal.type === "online"
+                {apiResults.comparison?.lowestOverall &&
+                  (() => {
+                    const deal =
+                      apiResults.comparison.lowestOverall
 
-  return (
-    <div className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 p-4 text-white shadow-md">
+                    const isOnline =
+                      deal.type === "online"
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      const currentStore =
+  apiResults?.nearbyVendors?.find(
+    (vendor) => vendor.name === selectedVendor
+  ) || null
 
-        <div>
+                    return (
+                      <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-5 sm:p-6 text-white shadow-xl shadow-indigo-600/20">
 
-          <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-100">
-            🏆 Lowest Price Found
-          </p>
+                        <div className="absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
 
-          <h3 className="mt-1 text-sm font-black">
-            {deal.seller || deal.platform || "Baiskit Seller"}
-          </h3>
+                        <div className="relative">
 
-          {deal.condition && (
-            <p className="text-[11px] text-indigo-100 mt-0.5">
-              {deal.condition}
-            </p>
-          )}
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
-        </div>
+                            <div>
+                              <p className="text-[9px] font-black uppercase tracking-[0.16em] text-indigo-100">
+                                🏆 Lowest Price Found
+                              </p>
 
-        <div className="sm:text-right">
+                              <h3 className="mt-1.5 text-base font-black">
+                                {deal.seller ||
+                                  deal.platform ||
+                                  "Baiskit Seller"}
+                              </h3>
 
-          <p className="text-2xl font-black">
-            ₹{deal.price}
-          </p>
+                              {deal.condition && (
+                                <p className="mt-1 text-[11px] text-indigo-100">
+                                  {deal.condition}
+                                </p>
+                              )}
+                            </div>
 
-          <p className="text-[10px] text-indigo-100 capitalize">
-            {deal.type}
-          </p>
+                            <div className="sm:text-right">
+                              <p className="text-3xl font-black tracking-tight">
+                                ₹{deal.price}
+                              </p>
 
-        </div>
+                              <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-indigo-100">
+                                {deal.type}
+                              </p>
+                            </div>
 
-      </div>
+                          </div>
 
-      {isOnline && deal.url ? (
-        <a
-          href={deal.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block w-full mt-3 rounded-xl bg-white py-2 text-center text-xs font-black text-indigo-700 hover:bg-indigo-50 transition"
-        >
-          View Lowest Online Deal →
-        </a>
-      ) : (
-        <button
-          onClick={() => {
-            addToCart({
-              id: `compare-${Date.now()}`,
-              name: `${search}${
-                deal.condition
-                  ? ` (${deal.condition})`
-                  : ""
-              }`,
-              price: deal.price,
-              vendor:
-                deal.seller ||
-                deal.platform ||
-                "Baiskit",
-              image:
-                "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=200&q=80"
-            })
-          }}
-          className="w-full mt-3 rounded-xl bg-white py-2 text-xs font-black text-indigo-700 hover:bg-indigo-50 transition"
-        >
-          Add Lowest Price to Basket 🛒
-        </button>
-      )}
+                          {isOnline && deal.url ? (
+                            <a
+                              href={deal.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-4 block rounded-2xl bg-white py-3 text-center text-xs font-black text-indigo-700 transition hover:bg-indigo-50"
+                            >
+                              View Lowest Online Deal →
+                            </a>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                addToCart({
+                                  id: `compare-${Date.now()}`,
+                                  name: `${search}${
+                                    deal.condition
+                                      ? ` (${deal.condition})`
+                                      : ""
+                                  }`,
+                                  price: deal.price,
+                                  vendor:
+                                    deal.seller ||
+                                    deal.platform ||
+                                    "Baiskit",
+                                  image:
+                                    "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=200&q=80"
+                                })
+                              }}
+                              className="mt-4 w-full rounded-2xl bg-white py-3 text-xs font-black text-indigo-700 transition hover:bg-indigo-50"
+                            >
+                              Add Lowest Price to Basket 🛒
+                            </button>
+                          )}
 
-    </div>
-  )
-})()}
+                        </div>
+                      </div>
+                    )
+                  })()}
 
-                {/* PRICE CATEGORIES */}
+                {/* PRICE CATEGORY CARDS */}
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
 
                   {/* LOCAL */}
 
-                  <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm">
+                  <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm">
 
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      🏪 Lowest Local
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                        🏪 Lowest Local
+                      </p>
 
-                    {apiResults.comparison
-                      ?.lowestLocal ? (
+                      <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[9px] font-black text-indigo-600">
+                        LOCAL
+                      </span>
+                    </div>
 
+                    {apiResults.comparison?.lowestLocal ? (
                       <>
-                        <h3 className="mt-2 text-xs font-black text-slate-900">
+                        <h3 className="mt-4 line-clamp-1 text-xs font-black text-slate-900">
                           {apiResults.comparison.lowestLocal.seller ||
                             apiResults.comparison.lowestLocal.platform}
                         </h3>
 
-                        <p className="text-lg font-black text-indigo-600 mt-1">
+                        <p className="mt-1 text-2xl font-black text-indigo-600">
                           ₹
                           {
                             apiResults.comparison
@@ -1574,42 +1802,42 @@ openNow={vendor.openNow}
                           }
                         </p>
 
-                        <p className="text-[10px] text-slate-500 mt-1">
+                        <p className="mt-1 text-[10px] text-slate-500">
                           {apiResults.comparison
                             .lowestLocal
                             .distance ||
                             "Baiskit listing"}
                         </p>
                       </>
-
                     ) : (
-
-                      <p className="mt-2 text-xs text-slate-400">
+                      <p className="mt-5 text-xs text-slate-400">
                         No local price found
                       </p>
-
                     )}
-
                   </div>
 
                   {/* SECOND HAND */}
 
-                  <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm">
+                  <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm">
 
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      ♻️ Lowest Second-Hand
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                        ♻️ Second-Hand
+                      </p>
 
-                    {apiResults.comparison
-                      ?.lowestSecondHand ? (
+                      <span className="rounded-lg bg-emerald-50 px-2 py-1 text-[9px] font-black text-emerald-600">
+                        USED
+                      </span>
+                    </div>
 
+                    {apiResults.comparison?.lowestSecondHand ? (
                       <>
-                        <h3 className="mt-2 text-xs font-black text-slate-900">
+                        <h3 className="mt-4 line-clamp-1 text-xs font-black text-slate-900">
                           {apiResults.comparison.lowestSecondHand.seller ||
                             apiResults.comparison.lowestSecondHand.platform}
                         </h3>
 
-                        <p className="text-lg font-black text-emerald-600 mt-1">
+                        <p className="mt-1 text-2xl font-black text-emerald-600">
                           ₹
                           {
                             apiResults.comparison
@@ -1618,37 +1846,37 @@ openNow={vendor.openNow}
                           }
                         </p>
 
-                        <p className="text-[10px] text-slate-500 mt-1">
+                        <p className="mt-1 text-[10px] text-slate-500">
                           {apiResults.comparison
                             .lowestSecondHand
                             .condition ||
                             "Second-hand"}
                         </p>
                       </>
-
                     ) : (
-
-                      <p className="mt-2 text-xs text-slate-400">
+                      <p className="mt-5 text-xs text-slate-400">
                         No second-hand price found
                       </p>
-
                     )}
-
                   </div>
 
                   {/* ONLINE */}
 
-                  <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm">
+                  <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm">
 
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      🌐 Lowest Online
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                        🌐 Lowest Online
+                      </p>
 
-                    {apiResults.comparison
-                      ?.lowestOnline ? (
+                      <span className="rounded-lg bg-blue-50 px-2 py-1 text-[9px] font-black text-blue-600">
+                        LIVE
+                      </span>
+                    </div>
 
+                    {apiResults.comparison?.lowestOnline ? (
                       <>
-                        <h3 className="mt-2 text-xs font-black text-slate-900">
+                        <h3 className="mt-4 line-clamp-1 text-xs font-black text-slate-900">
                           {
                             apiResults.comparison
                               .lowestOnline
@@ -1656,7 +1884,7 @@ openNow={vendor.openNow}
                           }
                         </h3>
 
-                        <p className="text-lg font-black text-blue-600 mt-1">
+                        <p className="mt-1 text-2xl font-black text-blue-600">
                           ₹
                           {
                             apiResults.comparison
@@ -1670,90 +1898,79 @@ openNow={vendor.openNow}
                           .url && (
                           <a
                             href={
-                              apiResults
-                                .comparison
+                              apiResults.comparison
                                 .lowestOnline
                                 .url
                             }
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-block mt-2 text-[10px] font-bold text-blue-600 hover:underline"
+                            className="mt-1 inline-block text-[10px] font-black text-blue-600 hover:underline"
                           >
                             View Online Deal →
                           </a>
                         )}
-
                       </>
-
                     ) : (
-
-                      <p className="mt-2 text-xs text-slate-400">
+                      <p className="mt-5 text-xs text-slate-400">
                         Online prices not available yet
                       </p>
-
                     )}
-
                   </div>
 
                 </div>
 
                 {/* ALL PRICE RESULTS */}
 
-                {apiResults.priceResults
-                  ?.length > 0 && (
+                {apiResults.priceResults?.length > 0 && (
+                  <div className="space-y-3">
 
-                  <div className="space-y-2">
+                    <div className="flex items-end justify-between">
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-[0.16em] text-indigo-600">
+                          Marketplace results
+                        </p>
 
-                    <div className="flex items-center justify-between">
+                        <h3 className="mt-1 text-lg font-black text-slate-900">
+                          All Available Prices
+                        </h3>
+                      </div>
 
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        All Available Prices
-                      </p>
-
-                      <span className="text-[10px] text-slate-400">
-                        {
-                          apiResults
-                            .priceResults
-                            .length
-                        }{" "}
-                        offers
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[9px] font-black text-slate-500">
+                        {apiResults.priceResults.length} offers
                       </span>
-
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
 
                       {apiResults.priceResults.map(
                         (item, index) => {
 
                           const isOnline =
-                            item.type ===
-                            "online"
+                            item.type === "online"
 
                           const isSecondHand =
-                            item.type ===
-                            "second-hand"
+                            item.type === "second-hand"
 
                           return (
                             <div
                               key={`${item.seller || item.platform || "price"}-${index}`}
-                              className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm"
+                              className="group rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                             >
 
                               <div className="flex items-start justify-between gap-3">
 
                                 <div className="min-w-0">
 
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex flex-wrap items-center gap-2">
 
-                                    <h4 className="text-xs font-bold text-slate-900 truncate">
+                                    <h4 className="max-w-[190px] truncate text-xs font-black text-slate-900">
                                       {item.seller ||
                                         item.platform ||
                                         "Seller"}
                                     </h4>
 
                                     <span
-                                      className={`shrink-0 rounded-full px-2 py-0.5 text-[8px] font-black uppercase ${
+                                      className={`shrink-0 rounded-full px-2 py-1 text-[8px] font-black uppercase ${
                                         isOnline
                                           ? "bg-blue-50 text-blue-600"
                                           : isSecondHand
@@ -1767,69 +1984,58 @@ openNow={vendor.openNow}
                                         ? "Second-Hand"
                                         : "Local"}
                                     </span>
-
                                   </div>
 
-                                  <p className="text-[10px] text-slate-500 mt-1 truncate">
+                                  <p className="mt-1.5 truncate text-[10px] font-medium text-slate-500">
                                     {item.product ||
                                       search}
                                   </p>
 
-                                  <p className="text-[10px] text-slate-400 mt-0.5">
-                                    {item.condition ||
-                                      ""}
+                                  <p className="mt-1 text-[9px] text-slate-400">
+                                    {item.condition || ""}
 
                                     {item.distance
                                       ? ` • ${item.distance}`
                                       : ""}
                                   </p>
-
                                 </div>
 
-                                <div className="text-right shrink-0">
+                                <div className="shrink-0 text-right">
 
-                                  <p className="text-sm font-black text-slate-900">
-                                    ₹
-                                    {item.price}
+                                  <p className="text-xl font-black tracking-tight text-slate-900">
+                                    ₹{item.price}
                                   </p>
 
                                   {item.rating && (
-                                    <p className="text-[9px] text-amber-500 font-bold">
-                                      ⭐{" "}
-                                      {item.rating}
+                                    <p className="mt-0.5 text-[9px] font-black text-amber-500">
+                                      ⭐ {item.rating}
                                     </p>
                                   )}
-
                                 </div>
-
                               </div>
 
-                              <div className="mt-2.5 flex items-center justify-between gap-2">
+                              <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
 
-                                <span className="text-[9px] font-bold text-slate-400">
+                                <span className="truncate text-[9px] font-bold text-slate-400">
                                   {item.source ||
                                     "Baiskit"}
                                 </span>
 
                                 {isOnline &&
                                 item.url ? (
-
                                   <a
                                     href={
                                       item.url
                                     }
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="rounded-lg bg-blue-600 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-blue-700 transition"
+                                    className="shrink-0 rounded-xl bg-blue-600 px-3.5 py-2 text-[10px] font-black text-white transition hover:bg-blue-700"
                                   >
                                     View Deal →
                                   </a>
-
                                 ) : (
-
                                   <button
                                     onClick={() => {
-
                                       addToCart({
                                         id: `compare-${Date.now()}-${index}`,
                                         name:
@@ -1844,36 +2050,33 @@ openNow={vendor.openNow}
                                         image:
                                           "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=200&q=80"
                                       })
-
                                     }}
-                                    className="rounded-lg bg-slate-900 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-slate-800 transition"
+                                    className="shrink-0 rounded-xl bg-slate-950 px-3.5 py-2 text-[10px] font-black text-white transition hover:bg-slate-800"
                                   >
                                     Add to Basket
                                   </button>
-
                                 )}
 
                               </div>
-
                             </div>
                           )
                         }
                       )}
 
                     </div>
-
                   </div>
-
                 )}
 
-                {/* NO PRICE RESULTS */}
+                {/* NO RESULTS */}
 
-                {!apiResults.priceResults
-                  ?.length && (
+                {!apiResults.priceResults?.length && (
+                  <div className="rounded-[28px] border border-dashed border-slate-300 bg-white p-8 text-center">
 
-                  <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl">
+                      🔍
+                    </div>
 
-                    <p className="text-sm font-bold text-slate-700">
+                    <p className="mt-3 text-sm font-black text-slate-700">
                       No price results found
                     </p>
 
@@ -1882,63 +2085,55 @@ openNow={vendor.openNow}
                     </p>
 
                   </div>
-
                 )}
 
                 {/* NEARBY VENDORS */}
 
-                {apiResults.nearbyVendors
-                  ?.length > 0 && (
+                {apiResults.nearbyVendors?.length > 0 && (
+                  <div className="space-y-3">
 
-                  <div className="space-y-2">
+                    <div className="flex items-end justify-between">
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-[0.16em] text-indigo-600">
+                          Physical stores
+                        </p>
 
-                    <div className="flex items-center justify-between">
+                        <h3 className="mt-1 text-lg font-black text-slate-900">
+                          Nearby Stores
+                        </h3>
+                      </div>
 
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        Nearby Stores
-                      </p>
-
-                      <span className="text-[10px] text-slate-400">
-                        {
-                          apiResults
-                            .nearbyVendors
-                            .length
-                        }{" "}
-                        found
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[9px] font-black text-slate-500">
+                        {apiResults.nearbyVendors.length} found
                       </span>
-
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 
                       {apiResults.nearbyVendors.map(
                         (vendor, index) => (
-
                           <div
                             key={`${vendor.name || "vendor"}-${index}`}
-                            className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
+                            className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                           >
 
                             <div className="flex items-start justify-between gap-3">
 
                               <div className="min-w-0">
 
-                                <h4 className="text-xs font-black text-slate-900 truncate">
+                                <h4 className="truncate text-xs font-black text-slate-900">
                                   {vendor.name ||
                                     "Nearby Store"}
                                 </h4>
 
-                                <p className="mt-1 text-[10px] text-slate-500">
+                                <p className="mt-1.5 line-clamp-2 text-[10px] leading-relaxed text-slate-500">
                                   {vendor.address ||
                                     "Local store"}
                                 </p>
 
                                 {vendor.distance && (
-                                  <p className="mt-1 text-[10px] font-bold text-indigo-600">
-                                    📍{" "}
-                                    {
-                                      vendor.distance
-                                    }
+                                  <p className="mt-2 text-[9px] font-black text-indigo-600">
+                                    📍 {vendor.distance}
                                   </p>
                                 )}
 
@@ -1947,31 +2142,29 @@ openNow={vendor.openNow}
                               <div className="shrink-0 text-right">
 
                                 {vendor.rating && (
-                                  <p className="text-[9px] font-bold text-amber-500">
-                                    ⭐{" "}
-                                    {
-                                      vendor.rating
-                                    }
+                                  <p className="rounded-lg bg-amber-50 px-2 py-1 text-[9px] font-black text-amber-600">
+                                    ⭐ {vendor.rating}
                                   </p>
                                 )}
 
                                 {vendor.openNow !==
-                                  undefined && (
-                                  <p
-                                    className={`mt-1 text-[9px] font-bold ${
-                                      vendor.openNow
-                                        ? "text-emerald-600"
-                                        : "text-rose-500"
-                                    }`}
-                                  >
-                                    {vendor.openNow
-                                      ? "Open"
-                                      : "Closed"}
-                                  </p>
-                                )}
+                                  null &&
+                                  vendor.openNow !==
+                                    undefined && (
+                                    <p
+                                      className={`mt-1.5 text-[9px] font-black ${
+                                        vendor.openNow
+                                          ? "text-emerald-600"
+                                          : "text-rose-500"
+                                      }`}
+                                    >
+                                      {vendor.openNow
+                                        ? "Open"
+                                        : "Closed"}
+                                    </p>
+                                  )}
 
                               </div>
-
                             </div>
 
                             {vendor.mapsUrl && (
@@ -1981,50 +2174,47 @@ openNow={vendor.openNow}
                                 }
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-block mt-2 text-[10px] font-bold text-indigo-600 hover:underline"
+                                className="mt-3 inline-flex items-center rounded-xl bg-indigo-50 px-3 py-2 text-[10px] font-black text-indigo-700 transition hover:bg-indigo-100"
                               >
                                 Open in Maps →
                               </a>
                             )}
 
                           </div>
-
                         )
                       )}
 
                     </div>
-
                   </div>
-
                 )}
 
               </section>
-
             )}
 
-            {/* PRODUCT FEED */}
+            {/* ==================================================
+                PRODUCT FEED
+            ================================================== */}
 
-            {!apiResults && (
+            {!apiResults && !isLoading && (
+              <section className="mt-8 space-y-4">
 
-              <section className="space-y-4">
-
-                <div>
-
-                  <h2 className="text-lg font-black text-slate-900">
-                    Explore Products
-                  </h2>
-
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Browse available Baiskit products
+                <div className="flex flex-col gap-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-indigo-600">
+                    Explore
                   </p>
 
+                  <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-950">
+                    Popular Products
+                  </h2>
+
+                  <p className="text-xs text-slate-500">
+                    Browse available Baiskit products and add them to your basket.
+                  </p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {filteredProducts.map(
                     (product) => (
-
                       <ProductCard
                         key={product.id}
                         product={product}
@@ -2034,22 +2224,18 @@ openNow={vendor.openNow}
                           )
                         }
                       />
-
                     )
                   )}
-
                 </div>
 
-                {filteredProducts.length ===
-                  0 && (
+                {filteredProducts.length === 0 && (
+                  <div className="rounded-[28px] border border-dashed border-slate-300 bg-white p-10 text-center">
 
-                  <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-8 text-center">
-
-                    <div className="text-3xl">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl">
                       🔍
                     </div>
 
-                    <h3 className="mt-2 text-sm font-bold text-slate-800">
+                    <h3 className="mt-3 text-sm font-black text-slate-800">
                       No products found
                     </h3>
 
@@ -2058,104 +2244,67 @@ openNow={vendor.openNow}
                     </p>
 
                   </div>
-
                 )}
 
               </section>
-
             )}
 
           </div>
-
         )}
 
       </main>
 
-      {/* MOBILE NAV */}
+      {/* --------------------------------------------------
+          MOBILE NAV
+      -------------------------------------------------- */}
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden border-t border-slate-200 bg-white/95 backdrop-blur-xl">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200/80 bg-white/90 px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-2xl lg:hidden">
 
-        <div className="grid grid-cols-4 px-2 py-2">
+        <div className="grid grid-cols-4 gap-1">
 
-          <button
-            onClick={() =>
-              setPage("home")
-            }
-            className={`flex flex-col items-center gap-1 rounded-xl py-2 text-[9px] font-bold ${
-              page === "home"
-                ? "text-indigo-600"
-                : "text-slate-400"
-            }`}
-          >
-            <span className="text-lg">
-              🏠
-            </span>
-            Home
-          </button>
+          {[
+            ["home", "🏠", "Home"],
+            ["vendors", "🏪", "Stores"],
+            ["orders", "📦", "Orders"],
+            ["basket", "🛒", "Basket"]
+          ].map(([target, icon, label]) => {
 
-          <button
-            onClick={() =>
-              setPage("vendors")
-            }
-            className={`flex flex-col items-center gap-1 rounded-xl py-2 text-[9px] font-bold ${
-              page === "vendors" ||
-              page === "store"
-                ? "text-indigo-600"
-                : "text-slate-400"
-            }`}
-          >
-            <span className="text-lg">
-              🏪
-            </span>
-            Stores
-          </button>
+            const active =
+              page === target ||
+              (target === "vendors" &&
+                page === "store")
 
-          <button
-            onClick={() =>
-              setPage("orders")
-            }
-            className={`flex flex-col items-center gap-1 rounded-xl py-2 text-[9px] font-bold ${
-              page === "orders"
-                ? "text-indigo-600"
-                : "text-slate-400"
-            }`}
-          >
-            <span className="text-lg">
-              📦
-            </span>
-            Orders
-          </button>
+            return (
+              <button
+                key={target}
+                onClick={() =>
+                  setPage(target)
+                }
+                className={`relative flex flex-col items-center gap-1 rounded-2xl py-2 text-[9px] font-black transition ${
+                  active
+                    ? "bg-indigo-50 text-indigo-600"
+                    : "text-slate-400 hover:bg-slate-50"
+                }`}
+              >
 
-          <button
-            onClick={() =>
-              setPage("basket")
-            }
-            className={`relative flex flex-col items-center gap-1 rounded-xl py-2 text-[9px] font-bold ${
-              page === "basket"
-                ? "text-indigo-600"
-                : "text-slate-400"
-            }`}
-          >
-            <span className="text-lg">
-              🛒
-            </span>
+                <span className="text-lg leading-none">
+                  {icon}
+                </span>
 
-            Basket
+                {label}
 
-            {cart.length > 0 && (
-              <span className="absolute top-0.5 right-5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[8px] font-black text-white">
-                {cart.reduce(
-                  (s, i) =>
-                    s + (i.qty || 1),
-                  0
-                )}
-              </span>
-            )}
+                {target === "basket" &&
+                  cartCount > 0 && (
+                    <span className="absolute right-[22%] top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[8px] font-black text-white ring-2 ring-white">
+                      {cartCount}
+                    </span>
+                  )}
 
-          </button>
+              </button>
+            )
+          })}
 
         </div>
-
       </nav>
 
     </div>
