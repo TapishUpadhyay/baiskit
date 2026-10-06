@@ -14,6 +14,8 @@ export default function App() {
   const [cart, setCart] = useState([])
   const [page, setPage] = useState("home")
   const [selectedVendor, setSelectedVendor] = useState(null)
+  const [selectedVendorPlaceId, setSelectedVendorPlaceId] = useState(null)
+  const [selectedVendorData, setSelectedVendorData] = useState(null)
   const [selectedCategory, setSelectedCategory] = useState("All")
 
   const [request, setRequest] = useState("")
@@ -185,8 +187,72 @@ export default function App() {
         return
       }
 
-      setApiResults(data)
+const validPriceResults = (
+  data.priceResults || []
+).filter((item) => {
+  const price = Number(item.price)
 
+  return (
+    Number.isFinite(price) &&
+    price > 0 &&
+    item.product &&
+    item.platform
+  )
+})
+
+const onlineResults = validPriceResults.filter(
+  (item) => item.type === "online"
+)
+
+const localResults = validPriceResults.filter(
+  (item) => item.type === "local"
+)
+
+const secondHandResults =
+  validPriceResults.filter(
+    (item) => item.type === "second-hand"
+  )
+
+const getLowest = (items) => {
+  if (!items.length) return null
+
+  return items.reduce((lowest, item) =>
+    Number(item.price) <
+    Number(lowest.price)
+      ? item
+      : lowest
+  )
+}
+
+const normalizedData = {
+  ...data,
+
+  priceResults: validPriceResults,
+
+  comparison: {
+    lowestOverall:
+      getLowest(validPriceResults),
+
+    lowestOnline:
+      getLowest(onlineResults),
+
+    lowestLocal:
+      getLowest(localResults),
+
+    lowestSecondHand:
+      getLowest(secondHandResults)
+  },
+
+  onlineCount: onlineResults.length,
+  localCount: localResults.length,
+  secondHandCount:
+    secondHandResults.length,
+
+  totalPriceResults:
+    validPriceResults.length
+}
+
+setApiResults(normalizedData)
       if (!data.priceResults?.length) {
         showToast(
           "No live prices found for this product. Try another product."
@@ -233,6 +299,25 @@ export default function App() {
     setSearch("")
     setApiResults(null)
   }
+
+  // --------------------------------------------------
+  // Open Store
+  // --------------------------------------------------
+
+  const openStore = (vendor) => {
+  if (!vendor) return
+
+  const vendorName =
+    vendor.name ||
+    vendor.seller ||
+    vendor.platform ||
+    "Local Store"
+
+  setSelectedVendor(vendorName)
+  setSelectedVendorPlaceId(vendor.id || null)
+  setSelectedVendorData(vendor)
+  setPage("store")
+}
 
   // --------------------------------------------------
   // Cart
@@ -399,8 +484,6 @@ export default function App() {
       return
     }
 
-      
-
     const results = sellers.filter((seller) => {
       const productName =
         seller.product?.toLowerCase() || ""
@@ -438,10 +521,17 @@ export default function App() {
   // Current Store
   // --------------------------------------------------
 
-  const currentStore =
-    apiResults?.nearbyVendors?.find(
-      (vendor) => vendor.donename === selectedVendor
-    ) || null
+ const currentStore =
+  selectedVendorData ||
+  apiResults?.nearbyVendors?.find(
+    (vendor) =>
+      (selectedVendorPlaceId &&
+        vendor.id === selectedVendorPlaceId) ||
+      (selectedVendor &&
+        vendor.name?.toLowerCase() ===
+          selectedVendor.toLowerCase())
+  ) ||
+  null
 
   // --------------------------------------------------
   // Home
@@ -498,6 +588,7 @@ export default function App() {
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10">
               ✨
             </span>
+
             <span className="truncate">
               {toast}
             </span>
@@ -937,9 +1028,7 @@ export default function App() {
                     placeholder="e.g. Wireless Earbuds, Study Desk..."
                     value={request}
                     onChange={(e) =>
-                      setRequest(
-                        e.target.value
-                      )
+                      setRequest(e.target.value)
                     }
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-xs font-semibold text-slate-800 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
                   />
@@ -966,9 +1055,7 @@ export default function App() {
                       placeholder="e.g. 1500"
                       value={budget}
                       onChange={(e) =>
-                        setBudget(
-                          e.target.value
-                        )
+                        setBudget(e.target.value)
                       }
                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-8 pr-4 text-xs font-bold text-slate-800 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
                     />
@@ -1119,11 +1206,12 @@ export default function App() {
                         </div>
 
                         <div className="flex gap-2">
+
                           <button
                             onClick={() => {
-                              setSelectedVendor(
-                                seller.name
-                              )
+                              setSelectedVendor(seller.name)
+                              setSelectedVendorData(seller)
+                              setSelectedVendorPlaceId(null)
                               setPage("store")
                             }}
                             className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black text-slate-700 transition hover:bg-slate-100"
@@ -1132,15 +1220,17 @@ export default function App() {
                           </button>
 
                           <button
-                            onClick={() =>
-                              showToast(
-                                `Connecting to ${seller.name}...`
-                              )
-                            }
+                            onClick={() => {
+                              setSelectedVendor(seller.name)
+                              setSelectedVendorData(seller)
+                              setSelectedVendorPlaceId(null)
+                              setPage("store")
+                            }}
                             className="rounded-xl bg-slate-950 px-3.5 py-2 text-[10px] font-black text-white transition hover:bg-slate-800"
                           >
                             Lock Deal
                           </button>
+
                         </div>
                       </div>
                     </div>
@@ -1169,28 +1259,27 @@ export default function App() {
               {apiResults?.nearbyVendors?.length > 0 ? (
                 apiResults.nearbyVendors.map(
                   (vendor, index) => (
-                   <VendorCard
-  key={
-    vendor.id ||
-    `${vendor.name}-${index}`
-  }
-  name={vendor.name}
-  type={
-    vendor.type ||
-    "Local Store"
-  }
-  distance={vendor.distance}
-  rating={vendor.rating}
-  totalRatings={
-    vendor.totalRatings
-  }
-  address={vendor.address}
-  openNow={vendor.openNow}
-  onView={() => {
-    setSelectedVendor(vendor.name)
-    setPage("store")
-  }}
-/>
+                    <VendorCard
+                      key={
+                        vendor.id ||
+                        `${vendor.name}-${index}`
+                      }
+                      name={vendor.name}
+                      type={
+                        vendor.type ||
+                        "Local Store"
+                      }
+                      distance={vendor.distance}
+                      rating={vendor.rating}
+                      totalRatings={
+                        vendor.totalRatings
+                      }
+                      address={vendor.address}
+                      openNow={vendor.openNow}
+                      onView={() => {
+                        openStore(vendor)
+                      }}
+                    />
                   )
                 )
               ) : (
@@ -1215,192 +1304,198 @@ export default function App() {
         )}
 
         {/* ==================================================
-    STORE
-================================================== */}
-
-{page === "store" && (
-  <section className="mx-auto max-w-4xl animate-in fade-in duration-300">
-
-    {/* BACK BUTTON */}
-    <button
-      onClick={() => setPage("vendors")}
-      className="mb-5 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-black text-slate-700 shadow-sm transition hover:-translate-x-0.5"
-    >
-      ← Back to Stores
-    </button>
-
-    <div className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-white shadow-sm">
-
-      {/* ==================================================
-          STORE HEADER
-      ================================================== */}
-
-      <div className="relative overflow-hidden bg-gradient-to-br from-indigo-950 via-slate-950 to-violet-950 p-6 text-white sm:p-8">
-
-        <div className="absolute -right-16 -top-20 h-48 w-48 rounded-full bg-indigo-500/20 blur-3xl" />
-
-        <div className="relative flex items-start justify-between gap-4">
-
-          <div className="min-w-0">
-
-            {/* STORE NAME */}
-            <div className="flex items-center gap-2">
-
-              <h2 className="truncate text-xl font-black sm:text-2xl">
-                {currentStore?.name ||
-                  selectedVendor ||
-                  "Local Store"}
-              </h2>
-
-              {currentStore && (
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 text-[9px] font-black text-white">
-                  ✓
-                </span>
-              )}
-
-            </div>
-
-            {/* ADDRESS */}
-            <p className="mt-2 text-xs leading-relaxed text-slate-300">
-              📍{" "}
-              {currentStore?.address ||
-                "Local store near your selected area"}
-            </p>
-
-            {/* REAL STORE STATUS */}
-            <div className="mt-4 flex flex-wrap gap-2">
-
-              {currentStore?.openNow !== null &&
-                currentStore?.openNow !== undefined && (
-                  <span
-                    className={`rounded-lg border px-2.5 py-1 text-[9px] font-black ${
-                      currentStore.openNow
-                        ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
-                        : "border-red-400/20 bg-red-400/10 text-red-300"
-                    }`}
-                  >
-                    ●{" "}
-                    {currentStore.openNow
-                      ? "Open Now"
-                      : "Closed"}
-                  </span>
-                )}
-
-              {/* REAL GOOGLE RATING */}
-              {currentStore?.rating !== null &&
-                currentStore?.rating !== undefined && (
-                  <span className="rounded-lg border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[9px] font-black text-amber-300">
-                    ⭐ {currentStore.rating} Rating
-                  </span>
-                )}
-
-            </div>
-
-          </div>
-
-          {/* STORE ICON */}
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-2xl backdrop-blur">
-            🏪
-          </div>
-
-        </div>
-      </div>
-
-      {/* ==================================================
-          STORE CONTENT
-      ================================================== */}
-
-      <div className="p-6">
-
-        {/* STORE INFORMATION */}
-        <div>
-
-          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
-            Store Information
-          </p>
-
-          <p className="mt-2 text-xs leading-relaxed text-slate-600">
-            {currentStore?.name
-              ? "Store information provided through Google Maps. Availability and pricing may vary."
-              : "Local store information is currently unavailable."}
-          </p>
-
-        </div>
-
-        {/* ==================================================
-            STORE DETAILS
+            STORE
         ================================================== */}
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        {page === "store" && (
+          <section className="mx-auto max-w-4xl animate-in fade-in duration-300">
 
-          {/* RATING */}
-          {currentStore?.rating !== null &&
-            currentStore?.rating !== undefined && (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <button
+              onClick={() => setPage("vendors")}
+              className="mb-5 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-black text-slate-700 shadow-sm transition hover:-translate-x-0.5"
+            >
+              ← Back to Stores
+            </button>
 
-                <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
-                  Rating
-                </p>
+            <div className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-white shadow-sm">
 
-                <p className="mt-1 text-lg font-black text-slate-900">
-                  ⭐ {currentStore.rating}
-                </p>
+              {/* STORE HEADER */}
 
+              <div className="relative overflow-hidden bg-gradient-to-br from-indigo-950 via-slate-950 to-violet-950 p-6 text-white sm:p-8">
+
+                <div className="absolute -right-16 -top-20 h-48 w-48 rounded-full bg-indigo-500/20 blur-3xl" />
+
+                <div className="relative flex items-start justify-between gap-4">
+
+                  <div className="min-w-0">
+
+                    <div className="flex items-center gap-2">
+
+                      <h2 className="truncate text-xl font-black sm:text-2xl">
+                        {currentStore?.name ||
+                          selectedVendor ||
+                          "Local Store"}
+                      </h2>
+
+                      {currentStore && (
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 text-[9px] font-black text-white">
+                          ✓
+                        </span>
+                      )}
+
+                    </div>
+
+                    <p className="mt-2 text-xs leading-relaxed text-slate-300">
+                      📍{" "}
+                      {currentStore?.address ||
+                        "Local store near your selected area"}
+                    </p>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+
+                      {currentStore?.openNow !== null &&
+                        currentStore?.openNow !== undefined && (
+                          <span
+                            className={`rounded-lg border px-2.5 py-1 text-[9px] font-black ${
+                              currentStore.openNow
+                                ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
+                                : "border-red-400/20 bg-red-400/10 text-red-300"
+                            }`}
+                          >
+                            ●{" "}
+                            {currentStore.openNow
+                              ? "Open Now"
+                              : "Closed"}
+                          </span>
+                        )}
+
+                      {currentStore?.rating !== null &&
+                        currentStore?.rating !== undefined && (
+                          <span className="rounded-lg border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[9px] font-black text-amber-300">
+                            ⭐ {currentStore.rating} Rating
+                          </span>
+                        )}
+
+                      {currentStore?.totalRatings !== null &&
+                        currentStore?.totalRatings !== undefined && (
+                          <span className="rounded-lg border border-white/10 bg-white/10 px-2.5 py-1 text-[9px] font-black text-slate-300">
+                            {currentStore.totalRatings} ratings
+                          </span>
+                        )}
+
+                    </div>
+
+                  </div>
+
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-2xl backdrop-blur">
+                    🏪
+                  </div>
+
+                </div>
               </div>
-            )}
 
-          {/* DISTANCE */}
-          {currentStore?.distance !== null &&
-            currentStore?.distance !== undefined && (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              {/* STORE CONTENT */}
 
-                <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
-                  Distance
-                </p>
+              <div className="p-6">
 
-                <p className="mt-1 text-lg font-black text-slate-900">
-                  {currentStore.distance} km
-                </p>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
+                    Store Information
+                  </p>
 
-              </div>
-            )}
+                  <p className="mt-2 text-xs leading-relaxed text-slate-600">
+                    {currentStore?.name
+                      ? "Store information provided through Google Maps or Baiskit seller data. Availability and pricing may vary."
+                      : "Local store information is currently unavailable."}
+                  </p>
+                </div>
 
-        </div>
+                {/* STORE DETAILS */}
 
-        {/* ==================================================
-            STORE PRICE LISTINGS
-        ================================================== */}
+                <div className="mt-6 grid gap-3 sm:grid-cols-2">
 
-        <div className="mt-8">
+                  {currentStore?.rating !== null &&
+                    currentStore?.rating !== undefined && (
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
 
-          <div className="flex items-end justify-between gap-3">
+                        <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                          Rating
+                        </p>
 
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
-                Products & Prices
-              </p>
+                        <p className="mt-1 text-lg font-black text-slate-900">
+                          ⭐ {currentStore.rating}
+                        </p>
 
-              <h3 className="mt-1 text-lg font-black text-slate-900">
-                Available Listings
-              </h3>
-            </div>
+                      </div>
+                    )}
 
-            {currentStore && (
-              <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[9px] font-black text-slate-500">
-                Live comparison
-              </span>
-            )}
+                  {currentStore?.distance !== null &&
+                    currentStore?.distance !== undefined && (
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
 
-          </div>
+                        <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                          Distance
+                        </p>
 
-          {(() => {
+                        <p className="mt-1 text-lg font-black text-slate-900">
+                          {currentStore.distance} km
+                        </p>
 
-            const storeListings =
+                      </div>
+                    )}
+
+                </div>
+
+                {/* STORE PRICE LISTINGS */}
+
+                <div className="mt-8">
+
+                  <div className="flex items-end justify-between gap-3">
+
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
+                        Products & Prices
+                      </p>
+
+                      <h3 className="mt-1 text-lg font-black text-slate-900">
+                        Available Listings
+                      </h3>
+                    </div>
+
+                    {currentStore && (
+                      <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[9px] font-black text-slate-500">
+                        Live comparison
+                      </span>
+                    )}
+
+                  </div>
+
+                  {(() => {
+                    const storeListings =
   apiResults?.priceResults?.filter((item) => {
-    const selectedName = (selectedVendor || "").toLowerCase()
+    const selectedName = (
+      selectedVendor ||
+      currentStore?.name ||
+      ""
+    )
+      .toLowerCase()
+      .trim()
 
-    const sellerName = (item.seller || "").toLowerCase()
-    const platformName = (item.platform || "").toLowerCase()
+    const sellerName = (
+      item.seller ||
+      ""
+    )
+      .toLowerCase()
+      .trim()
+
+    const platformName = (
+      item.platform ||
+      ""
+    )
+      .toLowerCase()
+      .trim()
+
+    if (!selectedName) return false
 
     return (
       sellerName === selectedName ||
@@ -1408,133 +1503,143 @@ export default function App() {
     )
   }) || []
 
-            if (!storeListings.length) {
-              return (
-                <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+                    if (!storeListings.length) {
+                      return (
+                        <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
 
-                  <div className="text-3xl">
-                    🛍️
-                  </div>
+                          <div className="text-3xl">
+                            🛍️
+                          </div>
 
-                  <p className="mt-2 text-sm font-black text-slate-700">
-                    No product prices available
-                  </p>
+                          <p className="mt-2 text-sm font-black text-slate-700">
+                            No product prices available
+                          </p>
 
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                    Baiskit does not currently have product-level
-                    pricing data for this store.
-                  </p>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                            Baiskit does not currently have product-level pricing data for this store.
+                          </p>
 
-                </div>
-              )
-            }
+                        </div>
+                      )
+                    }
 
-            return (
-              <div className="mt-4 space-y-3">
+                    return (
+                      <div className="mt-4 grid gap-4">
 
-                {storeListings.length > 0 ? (
-  <div className="grid gap-4">
-    {storeListings.map((item, index) => (
-      <div
-        key={`${item.platform}-${item.product}-${index}`}
-        className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="font-semibold text-gray-900">
-              {item.product}
-            </h3>
+                        {storeListings.map(
+                          (item, index) => (
+                            <div
+                              key={`${item.platform}-${item.product}-${index}`}
+                              className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm"
+                            >
 
-            <p className="mt-1 text-sm text-gray-500">
-              {item.condition || "Condition not specified"}
-            </p>
+                              <div className="flex items-start justify-between gap-4">
 
-            <p className="mt-2 text-sm text-gray-600">
-              Sold by {item.seller || item.platform}
-            </p>
-          </div>
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2">
 
-          <div className="text-right">
-            <p className="text-lg font-bold text-gray-900">
-              ₹{Number(item.price).toLocaleString("en-IN")}
-            </p>
+                                    <h3 className="font-semibold text-gray-900">
+                                      {item.product}
+                                    </h3>
 
-            {item.url && (
-              <a
-                href={item.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 inline-block text-sm font-medium text-blue-600 hover:underline"
-              >
-                View Deal →
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
-    ))}
-  </div>
-) : (
-  <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center">
-    <p className="font-medium text-gray-700">
-      No product listings available for this store yet.
-    </p>
+                                    <span
+                                      className={`rounded-full px-2 py-1 text-[8px] font-black uppercase ${
+                                        item.type ===
+                                        "online"
+                                          ? "bg-blue-50 text-blue-600"
+                                          : item.type ===
+                                            "second-hand"
+                                          ? "bg-emerald-50 text-emerald-700"
+                                          : "bg-indigo-50 text-indigo-700"
+                                      }`}
+                                    >
+                                      {item.type ===
+                                      "online"
+                                        ? "Online"
+                                        : item.type ===
+                                          "second-hand"
+                                        ? "Second-hand"
+                                        : "Local"}
+                                    </span>
 
-    <p className="mt-1 text-sm text-gray-500">
-      Baiskit only shows listings when real product data is available.
-    </p>
-  </div>
-)}
+                                  </div>
+
+                                  <p className="mt-1 text-sm text-gray-500">
+                                    {item.condition ||
+                                      "Condition not specified"}
+                                  </p>
+
+                                  <p className="mt-2 text-sm text-gray-600">
+                                    Sold by{" "}
+                                    {item.seller ||
+                                      item.platform}
+                                  </p>
+
+                                </div>
+
+                                <div className="text-right">
+
+                                  <p className="text-lg font-bold text-gray-900">
+                                    ₹
+                                    {Number(
+                                      item.price
+                                    ).toLocaleString(
+                                      "en-IN"
+                                    )}
+                                  </p>
+
+                                  {item.url && (
+                                    <a
+                                      href={item.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="mt-2 inline-block text-sm font-medium text-blue-600 hover:underline"
+                                    >
+                                      View Deal →
+                                    </a>
+                                  )}
+
+                                </div>
+
+                              </div>
+                            </div>
+                          )
+                        )}
 
                       </div>
+                    )
+                  })()}
 
-                    </div>
+                </div>
 
-                  </div>
+                {/* ACTIONS */}
 
-                ))}
+                <div className="mt-6 grid gap-3 sm:grid-cols-2">
+
+                  {currentStore?.mapsUrl && (
+                    <a
+                      href={currentStore.mapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-xs font-black text-white shadow-sm transition hover:bg-indigo-700"
+                    >
+                      📍 Open in Google Maps
+                    </a>
+                  )}
+
+                  <button
+                    onClick={() => setPage("vendors")}
+                    className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+                  >
+                    ← Browse Nearby Stores
+                  </button>
+
+                </div>
 
               </div>
-            )
-
-          })()}
-
-        </div>
-
-        {/* ==================================================
-            ACTIONS
-        ================================================== */}
-
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
-
-          {/* GOOGLE MAPS */}
-          {currentStore?.mapsUrl && (
-            <a
-              href={currentStore.mapsUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-xs font-black text-white shadow-sm transition hover:bg-indigo-700"
-            >
-              📍 Open in Google Maps
-            </a>
-          )}
-
-          {/* BACK TO STORES */}
-          <button
-            onClick={() => setPage("vendors")}
-            className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
-          >
-            ← Browse Nearby Stores
-          </button>
-
-        </div>
-
-      </div>
-
-    </div>
-
-  </section>
-)} 
+            </div>
+          </section>
+        )}
 
         {/* ==================================================
             ORDERS
@@ -1592,7 +1697,7 @@ export default function App() {
         {page === "home" && (
           <div className="animate-in fade-in duration-300">
 
-            {/* HERO WHEN NO SEARCH */}
+            {/* HERO */}
 
             {!apiResults && !isLoading && (
               <section className="relative mb-8 overflow-hidden rounded-[30px] bg-gradient-to-br from-indigo-950 via-slate-950 to-violet-950 p-6 sm:p-8 lg:p-10 text-white shadow-2xl shadow-indigo-950/10">
@@ -1669,9 +1774,7 @@ export default function App() {
               </section>
             )}
 
-            {/* ==================================================
-                PRICE COMPARISON
-            ================================================== */}
+            {/* PRICE COMPARISON */}
 
             {!isLoading && apiResults && (
               <section className="space-y-5">
@@ -1760,392 +1863,541 @@ export default function App() {
 
                 {/* LOWEST OVERALL */}
 
-                {apiResults.comparison?.lowestOverall &&
-                  (() => {
-                    const deal =
-                      apiResults.comparison.lowestOverall
+               ```jsx
+{apiResults.comparison?.lowestOverall &&
+  (() => {
+    const deal = apiResults.comparison.lowestOverall
 
-                    const isOnline =
-                      deal.type === "online"
+    const isOnline = deal.type === "online"
 
-                      
-                    return (
-                      <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-5 sm:p-6 text-white shadow-xl shadow-indigo-600/20">
+    return (
+      <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-5 sm:p-6 text-white shadow-xl shadow-indigo-600/20">
 
-                        <div className="absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
+        <div className="absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
+        <div className="absolute -bottom-20 -left-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
 
-                        <div className="relative">
+        <div className="relative">
 
-                          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
 
-                            <div>
-                              <p className="text-[9px] font-black uppercase tracking-[0.16em] text-indigo-100">
-                                🏆 Lowest Price Found
-                              </p>
+            <div className="min-w-0">
 
-                              <h3 className="mt-1.5 text-base font-black">
-                                {deal.seller ||
-                                  deal.platform ||
-                                  "Baiskit Seller"}
-                              </h3>
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 text-lg">
+                  🏆
+                </span>
 
-                              {deal.condition && (
-                                <p className="mt-1 text-[11px] text-indigo-100">
-                                  {deal.condition}
-                                </p>
-                              )}
-                            </div>
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.16em] text-indigo-100">
+                    Best Deal Found
+                  </p>
 
-                            <div className="sm:text-right">
-                              <p className="text-3xl font-black tracking-tight">
-                                ₹{deal.price}
-                              </p>
-
-                              <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-indigo-100">
-                                {deal.type}
-                              </p>
-                            </div>
-
-                          </div>
-
-                          {isOnline && deal.url ? (
-                            <a
-                              href={deal.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="mt-4 block rounded-2xl bg-white py-3 text-center text-xs font-black text-indigo-700 transition hover:bg-indigo-50"
-                            >
-                              View Lowest Online Deal →
-                            </a>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                addToCart({
-                                  id: `compare-${Date.now()}`,
-                                  name: `${search}${
-                                    deal.condition
-                                      ? ` (${deal.condition})`
-                                      : ""
-                                  }`,
-                                  price: deal.price,
-                                  vendor:
-                                    deal.seller ||
-                                    deal.platform ||
-                                    "Baiskit",
-                                  image:
-                                    "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=200&q=80"
-                                })
-                              }}
-                              className="mt-4 w-full rounded-2xl bg-white py-3 text-xs font-black text-indigo-700 transition hover:bg-indigo-50"
-                            >
-                              Add Lowest Price to Basket 🛒
-                            </button>
-                          )}
-
-                        </div>
-                      </div>
-                    )
-                  })()}
-
-                {/* PRICE CATEGORY CARDS */}
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-
-                  {/* LOCAL */}
-
-                  <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm">
-
-                    <div className="flex items-center justify-between">
-                      <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
-                        🏪 Lowest Local
-                      </p>
-
-                      <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[9px] font-black text-indigo-600">
-                        LOCAL
-                      </span>
-                    </div>
-
-                    {apiResults.comparison?.lowestLocal ? (
-                      <>
-                        <h3 className="mt-4 line-clamp-1 text-xs font-black text-slate-900">
-                          {apiResults.comparison.lowestLocal.seller ||
-                            apiResults.comparison.lowestLocal.platform}
-                        </h3>
-
-                        <p className="mt-1 text-2xl font-black text-indigo-600">
-                          ₹
-                          {
-                            apiResults.comparison
-                              .lowestLocal
-                              .price
-                          }
-                        </p>
-
-                        <p className="mt-1 text-[10px] text-slate-500">
-                          {apiResults.comparison
-                            .lowestLocal
-                            .distance ||
-                            "Baiskit listing"}
-                        </p>
-                      </>
-                    ) : (
-                      <p className="mt-5 text-xs text-slate-400">
-                        No local price found
-                      </p>
-                    )}
-                  </div>
-
-                  {/* SECOND HAND */}
-
-                  <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm">
-
-                    <div className="flex items-center justify-between">
-                      <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
-                        ♻️ Second-Hand
-                      </p>
-
-                      <span className="rounded-lg bg-emerald-50 px-2 py-1 text-[9px] font-black text-emerald-600">
-                        USED
-                      </span>
-                    </div>
-
-                    {apiResults.comparison?.lowestSecondHand ? (
-                      <>
-                        <h3 className="mt-4 line-clamp-1 text-xs font-black text-slate-900">
-                          {apiResults.comparison.lowestSecondHand.seller ||
-                            apiResults.comparison.lowestSecondHand.platform}
-                        </h3>
-
-                        <p className="mt-1 text-2xl font-black text-emerald-600">
-                          ₹
-                          {
-                            apiResults.comparison
-                              .lowestSecondHand
-                              .price
-                          }
-                        </p>
-
-                        <p className="mt-1 text-[10px] text-slate-500">
-                          {apiResults.comparison
-                            .lowestSecondHand
-                            .condition ||
-                            "Second-hand"}
-                        </p>
-                      </>
-                    ) : (
-                      <p className="mt-5 text-xs text-slate-400">
-                        No second-hand price found
-                      </p>
-                    )}
-                  </div>
-
-                  {/* ONLINE */}
-
-                  <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm">
-
-                    <div className="flex items-center justify-between">
-                      <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
-                        🌐 Lowest Online
-                      </p>
-
-                      <span className="rounded-lg bg-blue-50 px-2 py-1 text-[9px] font-black text-blue-600">
-                        LIVE
-                      </span>
-                    </div>
-
-                    {apiResults.comparison?.lowestOnline ? (
-                      <>
-                        <h3 className="mt-4 line-clamp-1 text-xs font-black text-slate-900">
-                          {
-                            apiResults.comparison
-                              .lowestOnline
-                              .platform
-                          }
-                        </h3>
-
-                        <p className="mt-1 text-2xl font-black text-blue-600">
-                          ₹
-                          {
-                            apiResults.comparison
-                              .lowestOnline
-                              .price
-                          }
-                        </p>
-
-                        {apiResults.comparison
-                          .lowestOnline
-                          .url && (
-                          <a
-                            href={
-                              apiResults.comparison
-                                .lowestOnline
-                                .url
-                            }
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-1 inline-block text-[10px] font-black text-blue-600 hover:underline"
-                          >
-                            View Online Deal →
-                          </a>
-                        )}
-                      </>
-                    ) : (
-                      <p className="mt-5 text-xs text-slate-400">
-                        Online prices not available yet
-                      </p>
-                    )}
-                  </div>
-
+                  <p className="text-[10px] font-semibold text-indigo-200">
+                    Lowest price across available listings
+                  </p>
                 </div>
+              </div>
+
+              <h3 className="mt-4 line-clamp-2 text-sm font-black leading-5">
+                {deal.product || search}
+              </h3>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+
+                <span className="rounded-lg bg-white/15 px-2 py-1 text-[9px] font-black">
+                  {deal.seller ||
+                    deal.platform ||
+                    "Baiskit Seller"}
+                </span>
+
+                <span className="rounded-lg bg-white/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-indigo-100">
+                  {deal.type === "second-hand"
+                    ? "♻️ Second-Hand"
+                    : deal.type === "local"
+                    ? "🏪 Local"
+                    : "🌐 Online"}
+                </span>
+
+                {deal.condition && (
+                  <span className="rounded-lg bg-white/10 px-2 py-1 text-[9px] font-semibold text-indigo-100">
+                    {deal.condition}
+                  </span>
+                )}
+
+              </div>
+            </div>
+
+            <div className="shrink-0 sm:text-right">
+
+              <p className="text-[9px] font-black uppercase tracking-wider text-indigo-200">
+                Starting from
+              </p>
+
+              <p className="mt-0.5 text-3xl font-black tracking-tight">
+                ₹{Number(deal.price).toLocaleString("en-IN")}
+              </p>
+
+            </div>
+
+          </div>
+
+          {isOnline && deal.url ? (
+            <a
+              href={deal.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-5 block rounded-2xl bg-white py-3.5 text-center text-xs font-black text-indigo-700 transition hover:bg-indigo-50"
+            >
+              View Best Online Deal →
+            </a>
+          ) : (
+            <button
+              onClick={() => {
+                addToCart({
+                  id: `compare-${Date.now()}`,
+                  name: `${deal.product || search}${
+                    deal.condition
+                      ? ` (${deal.condition})`
+                      : ""
+                  }`,
+                  price: deal.price,
+                  vendor:
+                    deal.seller ||
+                    deal.platform ||
+                    "Baiskit",
+                  image:
+                    "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=200&q=80"
+                })
+              }}
+              className="mt-5 w-full rounded-2xl bg-white py-3.5 text-xs font-black text-indigo-700 transition hover:bg-indigo-50"
+            >
+              Add Best Deal to Basket 🛒
+            </button>
+          )}
+
+        </div>
+      </div>
+    )
+  })()}
+```
+
+
+                       
+               ```jsx
+{/* PRICE CATEGORY CARDS */}
+
+<div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+
+  {/* LOCAL */}
+
+  <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-sm">
+          🏪
+        </span>
+
+        <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+          Lowest Local
+        </p>
+      </div>
+
+      <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[9px] font-black text-indigo-600">
+        LOCAL
+      </span>
+    </div>
+
+    {apiResults.comparison?.lowestLocal ? (
+      <>
+        <h3 className="mt-4 line-clamp-2 text-xs font-black leading-4 text-slate-900">
+          {apiResults.comparison.lowestLocal.product ||
+            search}
+        </h3>
+
+        <p className="mt-2 text-2xl font-black tracking-tight text-indigo-600">
+          ₹
+          {Number(
+            apiResults.comparison.lowestLocal.price
+          ).toLocaleString("en-IN")}
+        </p>
+
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="line-clamp-1 text-[10px] font-semibold text-slate-500">
+            {apiResults.comparison.lowestLocal.seller ||
+              apiResults.comparison.lowestLocal.platform ||
+              "Baiskit Seller"}
+          </p>
+
+          <span className="shrink-0 rounded-lg bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-500">
+            {apiResults.comparison.lowestLocal.distance ||
+              "Baiskit listing"}
+          </span>
+        </div>
+      </>
+    ) : (
+      <p className="mt-5 text-xs text-slate-400">
+        No local price found
+      </p>
+    )}
+
+  </div>
+
+
+  {/* SECOND HAND */}
+
+  <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-sm">
+          ♻️
+        </span>
+
+        <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+          Second-Hand
+        </p>
+      </div>
+
+      <span className="rounded-lg bg-emerald-50 px-2 py-1 text-[9px] font-black text-emerald-600">
+        USED
+      </span>
+    </div>
+
+    {apiResults.comparison?.lowestSecondHand ? (
+      <>
+        <h3 className="mt-4 line-clamp-2 text-xs font-black leading-4 text-slate-900">
+          {apiResults.comparison.lowestSecondHand.product ||
+            search}
+        </h3>
+
+        <p className="mt-2 text-2xl font-black tracking-tight text-emerald-600">
+          ₹
+          {Number(
+            apiResults.comparison.lowestSecondHand.price
+          ).toLocaleString("en-IN")}
+        </p>
+
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="line-clamp-1 text-[10px] font-semibold text-slate-500">
+            {apiResults.comparison.lowestSecondHand.seller ||
+              apiResults.comparison.lowestSecondHand.platform ||
+              "Baiskit Seller"}
+          </p>
+
+          <span className="shrink-0 rounded-lg bg-emerald-50 px-2 py-1 text-[9px] font-bold text-emerald-600">
+            {apiResults.comparison.lowestSecondHand.condition ||
+              "Second-hand"}
+          </span>
+        </div>
+      </>
+    ) : (
+      <p className="mt-5 text-xs text-slate-400">
+        No second-hand price found
+      </p>
+    )}
+
+  </div>
+
+
+  {/* ONLINE */}
+
+  <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-sm">
+          🌐
+        </span>
+
+        <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+          Lowest Online
+        </p>
+      </div>
+
+      <span className="rounded-lg bg-blue-50 px-2 py-1 text-[9px] font-black text-blue-600">
+        LIVE
+      </span>
+    </div>
+
+    {apiResults.comparison?.lowestOnline ? (
+      <>
+        <h3 className="mt-4 line-clamp-2 text-xs font-black leading-4 text-slate-900">
+          {apiResults.comparison.lowestOnline.product ||
+            search}
+        </h3>
+
+        <p className="mt-2 text-2xl font-black tracking-tight text-blue-600">
+          ₹
+          {Number(
+            apiResults.comparison.lowestOnline.price
+          ).toLocaleString("en-IN")}
+        </p>
+
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="line-clamp-1 text-[10px] font-semibold text-slate-500">
+            {apiResults.comparison.lowestOnline.platform ||
+              apiResults.comparison.lowestOnline.seller ||
+              "Online Store"}
+          </p>
+
+          {apiResults.comparison.lowestOnline.url && (
+            <a
+              href={
+                apiResults.comparison.lowestOnline.url
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 rounded-lg bg-blue-50 px-2 py-1 text-[9px] font-black text-blue-600 transition hover:bg-blue-100"
+            >
+              View Deal →
+            </a>
+          )}
+        </div>
+      </>
+    ) : (
+      <p className="mt-5 text-xs text-slate-400">
+        Online prices not available yet
+      </p>
+    )}
+
+  </div>
+
+</div>
+```
+
 
                 {/* ALL PRICE RESULTS */}
 
-                {apiResults.priceResults?.length > 0 && (
-                  <div className="space-y-3">
+                ```jsx
+{apiResults.priceResults?.length > 0 && (
+  <div className="space-y-4">
 
-                    <div className="flex items-end justify-between">
-                      <div>
-                        <p className="text-[9px] font-black uppercase tracking-[0.16em] text-indigo-600">
-                          Marketplace results
-                        </p>
+    <div className="flex items-end justify-between">
+      <div>
+        <p className="text-[9px] font-black uppercase tracking-[0.16em] text-indigo-600">
+          Marketplace results
+        </p>
 
-                        <h3 className="mt-1 text-lg font-black text-slate-900">
-                          All Available Prices
-                        </h3>
+        <h3 className="mt-1 text-lg font-black text-slate-900">
+          All Available Prices
+        </h3>
+
+        <p className="mt-1 text-[10px] text-slate-400">
+          Compare every valid price found for your search
+        </p>
+      </div>
+
+      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[9px] font-black text-slate-500">
+        {apiResults.priceResults.length} offers
+      </span>
+    </div>
+
+    {(() => {
+      const sortedPriceResults = [
+        ...(apiResults.priceResults || [])
+      ]
+        .filter((item) => {
+          const price = Number(item.price)
+
+          return (
+            Number.isFinite(price) &&
+            price > 0 &&
+            item.product &&
+            item.platform
+          )
+        })
+        .sort(
+          (a, b) =>
+            Number(a.price) -
+            Number(b.price)
+        )
+
+      const lowestOverallPrice =
+        sortedPriceResults.length > 0
+          ? Number(sortedPriceResults[0].price)
+          : null
+
+      return (
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+
+          {sortedPriceResults.map(
+            (item, index) => {
+
+              const isOnline =
+                item.type === "online"
+
+              const isSecondHand =
+                item.type === "second-hand"
+
+              const itemPrice =
+                Number(item.price)
+
+              const isBestDeal =
+                Number.isFinite(
+                  lowestOverallPrice
+                ) &&
+                Number.isFinite(itemPrice) &&
+                itemPrice ===
+                  lowestOverallPrice
+
+              return (
+                <div
+                  key={`${item.seller || item.platform || "price"}-${item.product || "product"}-${index}`}
+                  className={`group relative overflow-hidden rounded-3xl border bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                    isBestDeal
+                      ? "border-indigo-300 ring-2 ring-indigo-100"
+                      : "border-slate-200/80"
+                  }`}
+                >
+
+                  {isBestDeal && (
+                    <div className="absolute right-0 top-0 rounded-bl-2xl bg-indigo-600 px-3 py-1.5 text-[8px] font-black uppercase tracking-wide text-white">
+                      🏆 Best Price
+                    </div>
+                  )}
+
+                  <div className="flex items-start justify-between gap-3">
+
+                    <div className="min-w-0 pr-16">
+
+                      <div className="flex flex-wrap items-center gap-2">
+
+                        <h4 className="max-w-[190px] truncate text-xs font-black text-slate-900">
+                          {item.seller ||
+                            item.platform ||
+                            "Seller"}
+                        </h4>
+
+                        <span
+                          className={`shrink-0 rounded-full px-2.5 py-1 text-[8px] font-black uppercase ${
+                            isOnline
+                              ? "bg-blue-50 text-blue-600"
+                              : isSecondHand
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-indigo-50 text-indigo-700"
+                          }`}
+                        >
+                          {isOnline
+                            ? "Online"
+                            : isSecondHand
+                            ? "Second-hand"
+                            : "Local"}
+                        </span>
+
                       </div>
 
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[9px] font-black text-slate-500">
-                        {apiResults.priceResults.length} offers
-                      </span>
+                      <p className="mt-2 line-clamp-2 text-[10px] font-semibold leading-4 text-slate-600">
+                        {item.product ||
+                          search}
+                      </p>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+
+                        {item.condition && (
+                          <span className="rounded-lg bg-slate-100 px-2 py-1 text-[8px] font-bold text-slate-500">
+                            {item.condition}
+                          </span>
+                        )}
+
+                        {item.distance && (
+                          <span className="rounded-lg bg-slate-100 px-2 py-1 text-[8px] font-bold text-slate-500">
+                            📍 {item.distance}
+                          </span>
+                        )}
+
+                      </div>
+
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    <div className="shrink-0 text-right">
 
-                      {apiResults.priceResults.map(
-                        (item, index) => {
+                      <p
+                        className={`text-xl font-black tracking-tight ${
+                          isBestDeal
+                            ? "text-indigo-600"
+                            : "text-slate-900"
+                        }`}
+                      >
+                        ₹
+                        {Number(
+                          item.price
+                        ).toLocaleString(
+                          "en-IN"
+                        )}
+                      </p>
 
-                          const isOnline =
-                            item.type === "online"
-
-                          const isSecondHand =
-                            item.type === "second-hand"
-
-                          return (
-                            <div
-                              key={`${item.seller || item.platform || "price"}-${index}`}
-                              className="group rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                            >
-
-                              <div className="flex items-start justify-between gap-3">
-
-                                <div className="min-w-0">
-
-                                  <div className="flex flex-wrap items-center gap-2">
-
-                                    <h4 className="max-w-[190px] truncate text-xs font-black text-slate-900">
-                                      {item.seller ||
-                                        item.platform ||
-                                        "Seller"}
-                                    </h4>
-
-                                    <span
-                                      className={`shrink-0 rounded-full px-2 py-1 text-[8px] font-black uppercase ${
-                                        isOnline
-                                          ? "bg-blue-50 text-blue-600"
-                                          : isSecondHand
-                                          ? "bg-emerald-50 text-emerald-700"
-                                          : "bg-indigo-50 text-indigo-700"
-                                      }`}
-                                    >
-                                      {isOnline
-                                        ? "Online"
-                                        : isSecondHand
-                                        ? "Second-Hand"
-                                        : "Local"}
-                                    </span>
-                                  </div>
-
-                                  <p className="mt-1.5 truncate text-[10px] font-medium text-slate-500">
-                                    {item.product ||
-                                      search}
-                                  </p>
-
-                                  <p className="mt-1 text-[9px] text-slate-400">
-                                    {item.condition || ""}
-
-                                    {item.distance
-                                      ? ` • ${item.distance}`
-                                      : ""}
-                                  </p>
-                                </div>
-
-                                <div className="shrink-0 text-right">
-
-                                  <p className="text-xl font-black tracking-tight text-slate-900">
-                                    ₹{item.price}
-                                  </p>
-
-                                  {item.rating && (
-                                    <p className="mt-0.5 text-[9px] font-black text-amber-500">
-                                      ⭐ {item.rating}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
-
-                                <span className="truncate text-[9px] font-bold text-slate-400">
-                                  {item.source ||
-                                    "Baiskit"}
-                                </span>
-
-                                {isOnline &&
-                                item.url ? (
-                                  <a
-                                    href={
-                                      item.url
-                                    }
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="shrink-0 rounded-xl bg-blue-600 px-3.5 py-2 text-[10px] font-black text-white transition hover:bg-blue-700"
-                                  >
-                                    View Deal →
-                                  </a>
-                                ) : (
-                                  <button
-                                    onClick={() => {
-                                      addToCart({
-                                        id: `compare-${Date.now()}-${index}`,
-                                        name:
-                                          item.product ||
-                                          search,
-                                        price:
-                                          item.price,
-                                        vendor:
-                                          item.seller ||
-                                          item.platform ||
-                                          "Baiskit",
-                                        image:
-                                          "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=200&q=80"
-                                      })
-                                    }}
-                                    className="shrink-0 rounded-xl bg-slate-950 px-3.5 py-2 text-[10px] font-black text-white transition hover:bg-slate-800"
-                                  >
-                                    Add to Basket
-                                  </button>
-                                )}
-
-                              </div>
-                            </div>
-                          )
-                        }
+                      {item.rating && (
+                        <p className="mt-1 text-[9px] font-black text-amber-500">
+                          ⭐ {item.rating}
+                          {item.reviews
+                            ? ` (${item.reviews})`
+                            : ""}
+                        </p>
                       )}
 
                     </div>
-                  </div>
-                )}
 
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+
+                    <span className="truncate text-[9px] font-bold text-slate-400">
+                      {item.platform ||
+                        item.source ||
+                        "Baiskit"}
+                    </span>
+
+                    {isOnline &&
+                    item.url ? (
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 rounded-xl bg-blue-600 px-3.5 py-2 text-[10px] font-black text-white transition hover:bg-blue-700"
+                      >
+                        View Deal →
+                      </a>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          addToCart({
+                            id: `compare-${Date.now()}-${index}`,
+                            name:
+                              item.product ||
+                              search,
+                            price:
+                              item.price,
+                            vendor:
+                              item.seller ||
+                              item.platform ||
+                              "Baiskit",
+                            image:
+                              "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=200&q=80"
+                          })
+                        }}
+                        className="shrink-0 rounded-xl bg-slate-950 px-3.5 py-2 text-[10px] font-black text-white transition hover:bg-slate-800"
+                      >
+                        Add to Basket
+                      </button>
+                    )}
+
+                  </div>
+
+                </div>
+              )
+            }
+          )}
+
+        </div>
+      )
+    })()}
+
+  </div>
+)}
+
+
+                
                 {/* NO RESULTS */}
 
                 {!apiResults.priceResults?.length && (
@@ -2192,7 +2444,7 @@ export default function App() {
                       {apiResults.nearbyVendors.map(
                         (vendor, index) => (
                           <div
-                            key={`${vendor.name || "vendor"}-${index}`}
+                            key={`${vendor.id || vendor.name || "vendor"}-${index}`}
                             className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                           >
 
@@ -2247,27 +2499,28 @@ export default function App() {
                             </div>
 
                             <div className="mt-3 flex gap-2">
-  <button
-    onClick={() => {
-      setSelectedVendor(vendor.name)
-      setPage("store")
-    }}
-    className="rounded-lg bg-black px-3 py-2 text-sm font-medium text-white transition hover:opacity-80"
-  >
-    Visit Store →
-  </button>
 
-  {vendor.mapsUrl && (
-    <a
-      href={vendor.mapsUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium transition hover:bg-gray-100"
-    >
-      Maps
-    </a>
-  )}
-</div>
+                              <button
+                                onClick={() =>
+                                  openStore(vendor)
+                                }
+                                className="rounded-lg bg-black px-3 py-2 text-sm font-medium text-white transition hover:opacity-80"
+                              >
+                                Visit Store →
+                              </button>
+
+                              {vendor.mapsUrl && (
+                                <a
+                                  href={vendor.mapsUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium transition hover:bg-gray-100"
+                                >
+                                  Maps
+                                </a>
+                              )}
+
+                            </div>
 
                           </div>
                         )
@@ -2280,9 +2533,7 @@ export default function App() {
               </section>
             )}
 
-            {/* ==================================================
-                PRODUCT FEED
-            ================================================== */}
+            {/* PRODUCT FEED */}
 
             {!apiResults && !isLoading && (
               <section className="mt-8 space-y-4">
@@ -2308,9 +2559,7 @@ export default function App() {
                         key={product.id}
                         product={product}
                         onAdd={() =>
-                          addToCart(
-                            product
-                          )
+                          addToCart(product)
                         }
                       />
                     )
