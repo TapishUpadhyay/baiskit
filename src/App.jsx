@@ -71,9 +71,16 @@ export default function App() {
         setUserLocation({ lat, lng })
 
         try {
-          const response = await fetch(
-            `https://baiskit.onrender.com/api/vendors/nearby?lat=${lat}&lng=${lng}&keyword=store`
-          )
+          let response
+          try {
+            response = await fetch(
+              `http://localhost:5000/api/vendors/nearby?lat=${lat}&lng=${lng}&keyword=store`
+            )
+          } catch (err) {
+            response = await fetch(
+              `https://baiskit.onrender.com/api/vendors/nearby?lat=${lat}&lng=${lng}&keyword=store`
+            )
+          }
 
           const data = await response.json()
 
@@ -155,11 +162,16 @@ export default function App() {
         location = await getUserLocation()
       }
 
-      const response = await fetch(
-        `https://baiskit.onrender.com/api/search?product=${encodeURIComponent(
-          search.trim()
-        )}&lat=${location.lat}&lng=${location.lng}`
-      )
+      let response
+      const searchUrl = `/api/search?product=${encodeURIComponent(
+        search.trim()
+      )}&lat=${location.lat}&lng=${location.lng}`
+
+      try {
+        response = await fetch(`http://localhost:5000${searchUrl}`)
+      } catch (err) {
+        response = await fetch(`https://baiskit.onrender.com${searchUrl}`)
+      }
 
       const data = await response.json().catch(() => null)
 
