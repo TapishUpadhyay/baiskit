@@ -1863,538 +1863,400 @@ setApiResults(normalizedData)
 
                 {/* LOWEST OVERALL */}
 
-               ```jsx
-{apiResults.comparison?.lowestOverall &&
-  (() => {
-    const deal = apiResults.comparison.lowestOverall
+                {apiResults.comparison?.lowestOverall &&
+                  (() => {
+                    const deal = apiResults.comparison.lowestOverall
+                    const isOnline = deal.type === "online"
 
-    const isOnline = deal.type === "online"
+                    return (
+                      <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-5 sm:p-6 text-white shadow-xl shadow-indigo-600/20">
+                        <div className="absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
+                        <div className="absolute -bottom-20 -left-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
 
-    return (
-      <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-5 sm:p-6 text-white shadow-xl shadow-indigo-600/20">
+                        <div className="relative">
+                          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 text-lg">
+                                  🏆
+                                </span>
+                                <div>
+                                  <p className="text-[9px] font-black uppercase tracking-[0.16em] text-indigo-100">
+                                    Best Deal Found
+                                  </p>
+                                  <p className="text-[10px] font-semibold text-indigo-200">
+                                    Lowest price across available listings
+                                  </p>
+                                </div>
+                              </div>
 
-        <div className="absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
-        <div className="absolute -bottom-20 -left-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
+                              <h3 className="mt-4 line-clamp-2 text-sm sm:text-base font-black leading-snug">
+                                {deal.product || search}
+                              </h3>
 
-        <div className="relative">
+                              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                                <span className="rounded-lg bg-white/20 px-2.5 py-1 text-[10px] font-black">
+                                  {deal.seller || deal.platform || "Baiskit Seller"}
+                                </span>
 
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                                <span className="rounded-lg bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-indigo-100">
+                                  {deal.type === "second-hand"
+                                    ? "♻️ Second-Hand"
+                                    : deal.type === "local"
+                                    ? "🏪 Local"
+                                    : "🌐 Online"}
+                                </span>
 
-            <div className="min-w-0">
+                                {deal.condition && (
+                                  <span className="rounded-lg bg-white/10 px-2.5 py-1 text-[10px] font-semibold text-indigo-100">
+                                    {deal.condition}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
 
-              <div className="flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 text-lg">
-                  🏆
-                </span>
+                            <div className="shrink-0 sm:text-right">
+                              <p className="text-[9px] font-black uppercase tracking-wider text-indigo-200">
+                                Starting from
+                              </p>
+                              <p className="mt-0.5 text-3xl font-black tracking-tight">
+                                ₹{Number(deal.price).toLocaleString("en-IN")}
+                              </p>
+                            </div>
+                          </div>
 
-                <div>
-                  <p className="text-[9px] font-black uppercase tracking-[0.16em] text-indigo-100">
-                    Best Deal Found
-                  </p>
+                          {isOnline && deal.url ? (
+                            <a
+                              href={deal.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-5 block w-full rounded-2xl bg-white py-3.5 text-center text-xs font-black text-indigo-700 shadow-md transition hover:bg-indigo-50"
+                            >
+                              View Best Online Deal →
+                            </a>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                addToCart({
+                                  id: `compare-${Date.now()}`,
+                                  name: `${deal.product || search}${
+                                    deal.condition ? ` (${deal.condition})` : ""
+                                  }`,
+                                  price: deal.price,
+                                  vendor: deal.seller || deal.platform || "Baiskit",
+                                  image:
+                                    "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=200&q=80"
+                                })
+                              }}
+                              className="mt-5 w-full rounded-2xl bg-white py-3.5 text-xs font-black text-indigo-700 shadow-md transition hover:bg-indigo-50"
+                            >
+                              Add Best Deal to Basket 🛒
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })()}
 
-                  <p className="text-[10px] font-semibold text-indigo-200">
-                    Lowest price across available listings
-                  </p>
+                {/* PRICE CATEGORY CARDS */}
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {/* LOCAL */}
+                  <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-sm">
+                          🏪
+                        </span>
+                        <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                          Lowest Local
+                        </p>
+                      </div>
+                      <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[9px] font-black text-indigo-600">
+                        LOCAL
+                      </span>
+                    </div>
+
+                    {apiResults.comparison?.lowestLocal ? (
+                      <>
+                        <h3 className="mt-4 line-clamp-2 text-xs font-black leading-4 text-slate-900">
+                          {apiResults.comparison.lowestLocal.product || search}
+                        </h3>
+
+                        <p className="mt-2 text-2xl font-black tracking-tight text-indigo-600">
+                          ₹{Number(apiResults.comparison.lowestLocal.price).toLocaleString("en-IN")}
+                        </p>
+
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <p className="line-clamp-1 text-[10px] font-semibold text-slate-500">
+                            {apiResults.comparison.lowestLocal.seller ||
+                              apiResults.comparison.lowestLocal.platform ||
+                              "Baiskit Seller"}
+                          </p>
+                          <span className="shrink-0 rounded-lg bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-500">
+                            {apiResults.comparison.lowestLocal.distance || "Baiskit listing"}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="mt-5 text-xs text-slate-400">No local price found</p>
+                    )}
+                  </div>
+
+                  {/* SECOND HAND */}
+                  <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-sm">
+                          ♻️
+                        </span>
+                        <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                          Second-Hand
+                        </p>
+                      </div>
+                      <span className="rounded-lg bg-emerald-50 px-2 py-1 text-[9px] font-black text-emerald-600">
+                        USED
+                      </span>
+                    </div>
+
+                    {apiResults.comparison?.lowestSecondHand ? (
+                      <>
+                        <h3 className="mt-4 line-clamp-2 text-xs font-black leading-4 text-slate-900">
+                          {apiResults.comparison.lowestSecondHand.product || search}
+                        </h3>
+
+                        <p className="mt-2 text-2xl font-black tracking-tight text-emerald-600">
+                          ₹{Number(apiResults.comparison.lowestSecondHand.price).toLocaleString("en-IN")}
+                        </p>
+
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <p className="line-clamp-1 text-[10px] font-semibold text-slate-500">
+                            {apiResults.comparison.lowestSecondHand.seller ||
+                              apiResults.comparison.lowestSecondHand.platform ||
+                              "Baiskit Seller"}
+                          </p>
+                          <span className="shrink-0 rounded-lg bg-emerald-50 px-2 py-1 text-[9px] font-bold text-emerald-600">
+                            {apiResults.comparison.lowestSecondHand.condition || "Second-hand"}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="mt-5 text-xs text-slate-400">No second-hand price found</p>
+                    )}
+                  </div>
+
+                  {/* ONLINE */}
+                  <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-sm">
+                          🌐
+                        </span>
+                        <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                          Lowest Online
+                        </p>
+                      </div>
+                      <span className="rounded-lg bg-blue-50 px-2 py-1 text-[9px] font-black text-blue-600">
+                        LIVE
+                      </span>
+                    </div>
+
+                    {apiResults.comparison?.lowestOnline ? (
+                      <>
+                        <h3 className="mt-4 line-clamp-2 text-xs font-black leading-4 text-slate-900">
+                          {apiResults.comparison.lowestOnline.product || search}
+                        </h3>
+
+                        <p className="mt-2 text-2xl font-black tracking-tight text-blue-600">
+                          ₹{Number(apiResults.comparison.lowestOnline.price).toLocaleString("en-IN")}
+                        </p>
+
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <p className="line-clamp-1 text-[10px] font-semibold text-slate-500">
+                            {apiResults.comparison.lowestOnline.platform ||
+                              apiResults.comparison.lowestOnline.seller ||
+                              "Online Store"}
+                          </p>
+
+                          {apiResults.comparison.lowestOnline.url && (
+                            <a
+                              href={apiResults.comparison.lowestOnline.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="shrink-0 rounded-lg bg-blue-50 px-2 py-1 text-[9px] font-black text-blue-600 transition hover:bg-blue-100"
+                            >
+                              View Deal →
+                            </a>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="mt-5 text-xs text-slate-400">No online prices available yet</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-
-              <h3 className="mt-4 line-clamp-2 text-sm font-black leading-5">
-                {deal.product || search}
-              </h3>
-
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-
-                <span className="rounded-lg bg-white/15 px-2 py-1 text-[9px] font-black">
-                  {deal.seller ||
-                    deal.platform ||
-                    "Baiskit Seller"}
-                </span>
-
-                <span className="rounded-lg bg-white/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-indigo-100">
-                  {deal.type === "second-hand"
-                    ? "♻️ Second-Hand"
-                    : deal.type === "local"
-                    ? "🏪 Local"
-                    : "🌐 Online"}
-                </span>
-
-                {deal.condition && (
-                  <span className="rounded-lg bg-white/10 px-2 py-1 text-[9px] font-semibold text-indigo-100">
-                    {deal.condition}
-                  </span>
-                )}
-
-              </div>
-            </div>
-
-            <div className="shrink-0 sm:text-right">
-
-              <p className="text-[9px] font-black uppercase tracking-wider text-indigo-200">
-                Starting from
-              </p>
-
-              <p className="mt-0.5 text-3xl font-black tracking-tight">
-                ₹{Number(deal.price).toLocaleString("en-IN")}
-              </p>
-
-            </div>
-
-          </div>
-
-          {isOnline && deal.url ? (
-            <a
-              href={deal.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-5 block rounded-2xl bg-white py-3.5 text-center text-xs font-black text-indigo-700 transition hover:bg-indigo-50"
-            >
-              View Best Online Deal →
-            </a>
-          ) : (
-            <button
-              onClick={() => {
-                addToCart({
-                  id: `compare-${Date.now()}`,
-                  name: `${deal.product || search}${
-                    deal.condition
-                      ? ` (${deal.condition})`
-                      : ""
-                  }`,
-                  price: deal.price,
-                  vendor:
-                    deal.seller ||
-                    deal.platform ||
-                    "Baiskit",
-                  image:
-                    "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=200&q=80"
-                })
-              }}
-              className="mt-5 w-full rounded-2xl bg-white py-3.5 text-xs font-black text-indigo-700 transition hover:bg-indigo-50"
-            >
-              Add Best Deal to Basket 🛒
-            </button>
-          )}
-
-        </div>
-      </div>
-    )
-  })()}
-```
-
-
-                       
-               ```jsx
-{/* PRICE CATEGORY CARDS */}
-
-<div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-
-  {/* LOCAL */}
-
-  <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-sm">
-          🏪
-        </span>
-
-        <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
-          Lowest Local
-        </p>
-      </div>
-
-      <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[9px] font-black text-indigo-600">
-        LOCAL
-      </span>
-    </div>
-
-    {apiResults.comparison?.lowestLocal ? (
-      <>
-        <h3 className="mt-4 line-clamp-2 text-xs font-black leading-4 text-slate-900">
-          {apiResults.comparison.lowestLocal.product ||
-            search}
-        </h3>
-
-        <p className="mt-2 text-2xl font-black tracking-tight text-indigo-600">
-          ₹
-          {Number(
-            apiResults.comparison.lowestLocal.price
-          ).toLocaleString("en-IN")}
-        </p>
-
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <p className="line-clamp-1 text-[10px] font-semibold text-slate-500">
-            {apiResults.comparison.lowestLocal.seller ||
-              apiResults.comparison.lowestLocal.platform ||
-              "Baiskit Seller"}
-          </p>
-
-          <span className="shrink-0 rounded-lg bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-500">
-            {apiResults.comparison.lowestLocal.distance ||
-              "Baiskit listing"}
-          </span>
-        </div>
-      </>
-    ) : (
-      <p className="mt-5 text-xs text-slate-400">
-        No local price found
-      </p>
-    )}
-
-  </div>
-
-
-  {/* SECOND HAND */}
-
-  <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-sm">
-          ♻️
-        </span>
-
-        <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
-          Second-Hand
-        </p>
-      </div>
-
-      <span className="rounded-lg bg-emerald-50 px-2 py-1 text-[9px] font-black text-emerald-600">
-        USED
-      </span>
-    </div>
-
-    {apiResults.comparison?.lowestSecondHand ? (
-      <>
-        <h3 className="mt-4 line-clamp-2 text-xs font-black leading-4 text-slate-900">
-          {apiResults.comparison.lowestSecondHand.product ||
-            search}
-        </h3>
-
-        <p className="mt-2 text-2xl font-black tracking-tight text-emerald-600">
-          ₹
-          {Number(
-            apiResults.comparison.lowestSecondHand.price
-          ).toLocaleString("en-IN")}
-        </p>
-
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <p className="line-clamp-1 text-[10px] font-semibold text-slate-500">
-            {apiResults.comparison.lowestSecondHand.seller ||
-              apiResults.comparison.lowestSecondHand.platform ||
-              "Baiskit Seller"}
-          </p>
-
-          <span className="shrink-0 rounded-lg bg-emerald-50 px-2 py-1 text-[9px] font-bold text-emerald-600">
-            {apiResults.comparison.lowestSecondHand.condition ||
-              "Second-hand"}
-          </span>
-        </div>
-      </>
-    ) : (
-      <p className="mt-5 text-xs text-slate-400">
-        No second-hand price found
-      </p>
-    )}
-
-  </div>
-
-
-  {/* ONLINE */}
-
-  <div className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-sm">
-          🌐
-        </span>
-
-        <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
-          Lowest Online
-        </p>
-      </div>
-
-      <span className="rounded-lg bg-blue-50 px-2 py-1 text-[9px] font-black text-blue-600">
-        LIVE
-      </span>
-    </div>
-
-    {apiResults.comparison?.lowestOnline ? (
-      <>
-        <h3 className="mt-4 line-clamp-2 text-xs font-black leading-4 text-slate-900">
-          {apiResults.comparison.lowestOnline.product ||
-            search}
-        </h3>
-
-        <p className="mt-2 text-2xl font-black tracking-tight text-blue-600">
-          ₹
-          {Number(
-            apiResults.comparison.lowestOnline.price
-          ).toLocaleString("en-IN")}
-        </p>
-
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <p className="line-clamp-1 text-[10px] font-semibold text-slate-500">
-            {apiResults.comparison.lowestOnline.platform ||
-              apiResults.comparison.lowestOnline.seller ||
-              "Online Store"}
-          </p>
-
-          {apiResults.comparison.lowestOnline.url && (
-            <a
-              href={
-                apiResults.comparison.lowestOnline.url
-              }
-              target="_blank"
-              rel="noopener noreferrer"
-              className="shrink-0 rounded-lg bg-blue-50 px-2 py-1 text-[9px] font-black text-blue-600 transition hover:bg-blue-100"
-            >
-              View Deal →
-            </a>
-          )}
-        </div>
-      </>
-    ) : (
-      <p className="mt-5 text-xs text-slate-400">
-        Online prices not available yet
-      </p>
-    )}
-
-  </div>
-
-</div>
-```
-
 
                 {/* ALL PRICE RESULTS */}
 
-                ```jsx
-{apiResults.priceResults?.length > 0 && (
-  <div className="space-y-4">
-
-    <div className="flex items-end justify-between">
-      <div>
-        <p className="text-[9px] font-black uppercase tracking-[0.16em] text-indigo-600">
-          Marketplace results
-        </p>
-
-        <h3 className="mt-1 text-lg font-black text-slate-900">
-          All Available Prices
-        </h3>
-
-        <p className="mt-1 text-[10px] text-slate-400">
-          Compare every valid price found for your search
-        </p>
-      </div>
-
-      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[9px] font-black text-slate-500">
-        {apiResults.priceResults.length} offers
-      </span>
-    </div>
-
-    {(() => {
-      const sortedPriceResults = [
-        ...(apiResults.priceResults || [])
-      ]
-        .filter((item) => {
-          const price = Number(item.price)
-
-          return (
-            Number.isFinite(price) &&
-            price > 0 &&
-            item.product &&
-            item.platform
-          )
-        })
-        .sort(
-          (a, b) =>
-            Number(a.price) -
-            Number(b.price)
-        )
-
-      const lowestOverallPrice =
-        sortedPriceResults.length > 0
-          ? Number(sortedPriceResults[0].price)
-          : null
-
-      return (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-
-          {sortedPriceResults.map(
-            (item, index) => {
-
-              const isOnline =
-                item.type === "online"
-
-              const isSecondHand =
-                item.type === "second-hand"
-
-              const itemPrice =
-                Number(item.price)
-
-              const isBestDeal =
-                Number.isFinite(
-                  lowestOverallPrice
-                ) &&
-                Number.isFinite(itemPrice) &&
-                itemPrice ===
-                  lowestOverallPrice
-
-              return (
-                <div
-                  key={`${item.seller || item.platform || "price"}-${item.product || "product"}-${index}`}
-                  className={`group relative overflow-hidden rounded-3xl border bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
-                    isBestDeal
-                      ? "border-indigo-300 ring-2 ring-indigo-100"
-                      : "border-slate-200/80"
-                  }`}
-                >
-
-                  {isBestDeal && (
-                    <div className="absolute right-0 top-0 rounded-bl-2xl bg-indigo-600 px-3 py-1.5 text-[8px] font-black uppercase tracking-wide text-white">
-                      🏆 Best Price
-                    </div>
-                  )}
-
-                  <div className="flex items-start justify-between gap-3">
-
-                    <div className="min-w-0 pr-16">
-
-                      <div className="flex flex-wrap items-center gap-2">
-
-                        <h4 className="max-w-[190px] truncate text-xs font-black text-slate-900">
-                          {item.seller ||
-                            item.platform ||
-                            "Seller"}
-                        </h4>
-
-                        <span
-                          className={`shrink-0 rounded-full px-2.5 py-1 text-[8px] font-black uppercase ${
-                            isOnline
-                              ? "bg-blue-50 text-blue-600"
-                              : isSecondHand
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-indigo-50 text-indigo-700"
-                          }`}
-                        >
-                          {isOnline
-                            ? "Online"
-                            : isSecondHand
-                            ? "Second-hand"
-                            : "Local"}
-                        </span>
-
-                      </div>
-
-                      <p className="mt-2 line-clamp-2 text-[10px] font-semibold leading-4 text-slate-600">
-                        {item.product ||
-                          search}
-                      </p>
-
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-
-                        {item.condition && (
-                          <span className="rounded-lg bg-slate-100 px-2 py-1 text-[8px] font-bold text-slate-500">
-                            {item.condition}
-                          </span>
-                        )}
-
-                        {item.distance && (
-                          <span className="rounded-lg bg-slate-100 px-2 py-1 text-[8px] font-bold text-slate-500">
-                            📍 {item.distance}
-                          </span>
-                        )}
-
-                      </div>
-
-                    </div>
-
-                    <div className="shrink-0 text-right">
-
-                      <p
-                        className={`text-xl font-black tracking-tight ${
-                          isBestDeal
-                            ? "text-indigo-600"
-                            : "text-slate-900"
-                        }`}
-                      >
-                        ₹
-                        {Number(
-                          item.price
-                        ).toLocaleString(
-                          "en-IN"
-                        )}
-                      </p>
-
-                      {item.rating && (
-                        <p className="mt-1 text-[9px] font-black text-amber-500">
-                          ⭐ {item.rating}
-                          {item.reviews
-                            ? ` (${item.reviews})`
-                            : ""}
+                {apiResults.priceResults?.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-end justify-between">
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-[0.16em] text-indigo-600">
+                          Marketplace results
                         </p>
-                      )}
+                        <h3 className="mt-1 text-lg font-black text-slate-900">
+                          All Available Prices
+                        </h3>
+                        <p className="mt-1 text-[10px] text-slate-400">
+                          Compare every valid price found for your search
+                        </p>
+                      </div>
 
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[9px] font-black text-slate-500">
+                        {apiResults.priceResults.length} offers
+                      </span>
                     </div>
 
+                    {(() => {
+                      const sortedPriceResults = [...(apiResults.priceResults || [])]
+                        .filter((item) => {
+                          const price = Number(item.price)
+                          return Number.isFinite(price) && price > 0 && item.product && item.platform
+                        })
+                        .sort((a, b) => Number(a.price) - Number(b.price))
+
+                      const lowestOverallPrice =
+                        sortedPriceResults.length > 0 ? Number(sortedPriceResults[0].price) : null
+
+                      return (
+                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                          {sortedPriceResults.map((item, index) => {
+                            const isOnline = item.type === "online"
+                            const isSecondHand = item.type === "second-hand"
+                            const itemPrice = Number(item.price)
+
+                            const isBestDeal =
+                              Number.isFinite(lowestOverallPrice) &&
+                              Number.isFinite(itemPrice) &&
+                              itemPrice === lowestOverallPrice
+
+                            return (
+                              <div
+                                key={`${item.seller || item.platform || "price"}-${item.product || "product"}-${index}`}
+                                className={`group relative overflow-hidden rounded-3xl border bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                                  isBestDeal
+                                    ? "border-indigo-400 ring-2 ring-indigo-200"
+                                    : "border-slate-200/80"
+                                }`}
+                              >
+                                {isBestDeal && (
+                                  <div className="absolute right-0 top-0 rounded-bl-2xl bg-indigo-600 px-3 py-1.5 text-[8px] font-black uppercase tracking-wide text-white">
+                                    🏆 Best Price
+                                  </div>
+                                )}
+
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0 pr-16">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <h4 className="max-w-[190px] truncate text-xs font-black text-slate-900">
+                                        {item.seller || item.platform || "Seller"}
+                                      </h4>
+
+                                      <span
+                                        className={`shrink-0 rounded-full px-2.5 py-1 text-[8px] font-black uppercase ${
+                                          isOnline
+                                            ? "bg-blue-50 text-blue-600"
+                                            : isSecondHand
+                                            ? "bg-emerald-50 text-emerald-700"
+                                            : "bg-indigo-50 text-indigo-700"
+                                        }`}
+                                      >
+                                        {isOnline
+                                          ? "Online"
+                                          : isSecondHand
+                                          ? "Second-hand"
+                                          : "Local"}
+                                      </span>
+                                    </div>
+
+                                    <p className="mt-2 line-clamp-2 text-[10px] font-semibold leading-4 text-slate-600">
+                                      {item.product || search}
+                                    </p>
+
+                                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                      {item.condition && (
+                                        <span className="rounded-lg bg-slate-100 px-2 py-1 text-[8px] font-bold text-slate-500">
+                                          {item.condition}
+                                        </span>
+                                      )}
+
+                                      {item.distance && (
+                                        <span className="rounded-lg bg-slate-100 px-2 py-1 text-[8px] font-bold text-slate-500">
+                                          📍 {item.distance}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="shrink-0 text-right">
+                                    <p
+                                      className={`text-xl font-black tracking-tight ${
+                                        isBestDeal ? "text-indigo-600" : "text-slate-900"
+                                      }`}
+                                    >
+                                      ₹{Number(item.price).toLocaleString("en-IN")}
+                                    </p>
+
+                                    {item.rating && (
+                                      <p className="mt-1 text-[9px] font-black text-amber-500">
+                                        ⭐ {item.rating}
+                                        {item.reviews ? ` (${item.reviews})` : ""}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                                  <span className="truncate text-[9px] font-bold text-slate-400">
+                                    {item.platform || item.source || "Baiskit"}
+                                  </span>
+
+                                  {isOnline && item.url ? (
+                                    <a
+                                      href={item.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="shrink-0 rounded-xl bg-blue-600 px-3.5 py-2 text-[10px] font-black text-white transition hover:bg-blue-700"
+                                    >
+                                      View Deal →
+                                    </a>
+                                  ) : (
+                                    <button
+                                      onClick={() => {
+                                        addToCart({
+                                          id: `compare-${Date.now()}-${index}`,
+                                          name: item.product || search,
+                                          price: item.price,
+                                          vendor: item.seller || item.platform || "Baiskit",
+                                          image:
+                                            "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=200&q=80"
+                                        })
+                                      }}
+                                      className="shrink-0 rounded-xl bg-slate-950 px-3.5 py-2 text-[10px] font-black text-white transition hover:bg-slate-800"
+                                    >
+                                      Add to Basket 🛒
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()}
                   </div>
-
-                  <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
-
-                    <span className="truncate text-[9px] font-bold text-slate-400">
-                      {item.platform ||
-                        item.source ||
-                        "Baiskit"}
-                    </span>
-
-                    {isOnline &&
-                    item.url ? (
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="shrink-0 rounded-xl bg-blue-600 px-3.5 py-2 text-[10px] font-black text-white transition hover:bg-blue-700"
-                      >
-                        View Deal →
-                      </a>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          addToCart({
-                            id: `compare-${Date.now()}-${index}`,
-                            name:
-                              item.product ||
-                              search,
-                            price:
-                              item.price,
-                            vendor:
-                              item.seller ||
-                              item.platform ||
-                              "Baiskit",
-                            image:
-                              "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=200&q=80"
-                          })
-                        }}
-                        className="shrink-0 rounded-xl bg-slate-950 px-3.5 py-2 text-[10px] font-black text-white transition hover:bg-slate-800"
-                      >
-                        Add to Basket
-                      </button>
-                    )}
-
-                  </div>
-
-                </div>
-              )
-            }
-          )}
-
-        </div>
-      )
-    })()}
-
-  </div>
-)}
+                )}
 
 
                 
