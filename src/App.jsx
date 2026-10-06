@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react"
 import ProductCard from "./components/ProductCard"
 import VendorCard from "./components/VendorCard"
@@ -17,24 +16,22 @@ export default function App() {
   const [selectedVendor, setSelectedVendor] = useState(null)
   const [selectedCategory, setSelectedCategory] = useState("All")
 
-  // AI Reverse Demand Matchmaker
+  // Demand
   const [request, setRequest] = useState("")
   const [budget, setBudget] = useState("")
   const [quantity, setQuantity] = useState(1)
   const [matches, setMatches] = useState([])
 
-  // Search / Promo / Orders
+  // Search / Orders / Promo
   const [search, setSearch] = useState("")
   const [orders, setOrders] = useState([])
   const [promoCode, setPromoCode] = useState("")
   const [discountPercent, setDiscountPercent] = useState(0)
   const [toast, setToast] = useState(null)
 
-  // Backend comparison results
+  // Backend comparison
   const [apiResults, setApiResults] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
-
-  // User location
   const [userLocation, setUserLocation] = useState(null)
 
   const toastTimerRef = useRef(null)
@@ -78,7 +75,9 @@ export default function App() {
           resolve(location)
         },
         () => {
-          showToast("Please allow location access to compare nearby prices")
+          showToast(
+            "Please allow location access to compare nearby prices"
+          )
           reject(new Error("Location permission denied"))
         },
         {
@@ -91,7 +90,7 @@ export default function App() {
   }
 
   // --------------------------------------------------
-  // Baiskit Product Search
+  // Baiskit Search
   // --------------------------------------------------
 
   const searchBaiskit = async () => {
@@ -116,18 +115,36 @@ export default function App() {
         )}&lat=${location.lat}&lng=${location.lng}`
       )
 
-      if (!response.ok) {
+      const data = await response.json().catch(() => null)
+
+      if (!response.ok || !data?.success) {
         setApiResults(null)
-        showToast("No comparison found for this product")
+
+        showToast(
+          data?.message || "No comparison found for this product"
+        )
+
         return
       }
 
-      const data = await response.json()
-
       setApiResults(data)
+
+      if (!data.priceResults?.length) {
+        showToast("No live prices found yet")
+      }
     } catch (error) {
       console.error("Baiskit API error:", error)
+
       setApiResults(null)
+
+      if (
+        error.message === "Location permission denied" ||
+        error.message === "Geolocation not supported"
+      ) {
+        return
+      }
+
+      showToast("Unable to connect to Baiskit right now")
     } finally {
       setIsLoading(false)
     }
@@ -143,11 +160,13 @@ export default function App() {
   }
 
   // --------------------------------------------------
-  // Cart Operations
+  // Cart
   // --------------------------------------------------
 
   const addToCart = (product) => {
-    const existing = cart.find((item) => item.id === product.id)
+    const existing = cart.find(
+      (item) => item.id === product.id
+    )
 
     if (existing) {
       setCart(
@@ -194,11 +213,14 @@ export default function App() {
   }
 
   // --------------------------------------------------
-  // Promo Code
+  // Promo
   // --------------------------------------------------
 
   const applyPromo = () => {
-    if (promoCode.trim().toUpperCase() === "BAISKIT20") {
+    if (
+      promoCode.trim().toUpperCase() ===
+      "BAISKIT20"
+    ) {
       setDiscountPercent(0.2)
       showToast("🎉 20% Discount Activated!")
     } else {
@@ -212,11 +234,14 @@ export default function App() {
 
   const subtotal = cart.reduce(
     (sum, item) =>
-      sum + (Number(item.price) || 0) * (item.qty || 1),
+      sum +
+      (Number(item.price) || 0) *
+        (item.qty || 1),
     0
   )
 
-  const discountAmount = subtotal * discountPercent
+  const discountAmount =
+    subtotal * discountPercent
 
   const grandTotal = Math.max(
     0,
@@ -224,25 +249,29 @@ export default function App() {
   )
 
   // --------------------------------------------------
-  // Place Order
+  // Order
   // --------------------------------------------------
 
   const placeOrder = () => {
-    if (cart.length === 0) {
-      return
-    }
+    if (cart.length === 0) return
 
     const newOrder = {
-      id: `BSK-${Math.floor(100000 + Math.random() * 900000)}`,
+      id: `BSK-${Math.floor(
+        100000 + Math.random() * 900000
+      )}`,
       products: [...cart],
       total: Math.round(grandTotal),
-      date: new Date().toLocaleDateString("en-IN", {
-        month: "short",
-        day: "numeric",
-        year: "numeric"
-      }),
+      date: new Date().toLocaleDateString(
+        "en-IN",
+        {
+          month: "short",
+          day: "numeric",
+          year: "numeric"
+        }
+      ),
       status: "Confirmed",
-      estimatedDelivery: "Today, by 8:30 PM"
+      estimatedDelivery:
+        "Today, by 8:30 PM"
     }
 
     setOrders([newOrder, ...orders])
@@ -251,76 +280,99 @@ export default function App() {
     setPromoCode("")
     setPage("orders")
 
-    showToast("🎉 Order Placed Successfully!")
+    showToast(
+      "🎉 Order Placed Successfully!"
+    )
   }
 
   // --------------------------------------------------
-  // Filter Products
+  // Product Filter
   // --------------------------------------------------
 
-  const filteredProducts = products.filter((product) => {
-    const productName = product.name?.toLowerCase() || ""
-    const vendorName = product.vendor?.toLowerCase() || ""
-    const productCategory =
-      product.category?.toLowerCase() || ""
+  const filteredProducts = products.filter(
+    (product) => {
+      const productName =
+        product.name?.toLowerCase() || ""
 
-    const query = search.toLowerCase()
+      const vendorName =
+        product.vendor?.toLowerCase() || ""
 
-    const matchesSearch =
-      !query ||
-      productName.includes(query) ||
-      vendorName.includes(query)
+      const productCategory =
+        product.category?.toLowerCase() || ""
 
-    const matchesCategory =
-      selectedCategory === "All" ||
-      productCategory === selectedCategory.toLowerCase()
+      const query =
+        search.toLowerCase()
 
-    return matchesSearch && matchesCategory
-  })
+      const matchesSearch =
+        !query ||
+        productName.includes(query) ||
+        vendorName.includes(query)
+
+      const matchesCategory =
+        selectedCategory === "All" ||
+        productCategory ===
+          selectedCategory.toLowerCase()
+
+      return (
+        matchesSearch &&
+        matchesCategory
+      )
+    }
+  )
 
   // --------------------------------------------------
-  // Reverse Demand Matchmaker
+  // Demand Matchmaker
   // --------------------------------------------------
 
   const findMatches = () => {
     if (!request.trim()) {
-      showToast("Please enter what you are looking for")
+      showToast(
+        "Please enter what you are looking for"
+      )
       return
     }
 
-    const results = sellers.filter((seller) => {
-      const productName =
-        seller.product?.toLowerCase() || ""
+    const results = sellers.filter(
+      (seller) => {
+        const productName =
+          seller.product?.toLowerCase() || ""
 
-      const sellerName =
-        seller.name?.toLowerCase() || ""
+        const sellerName =
+          seller.name?.toLowerCase() || ""
 
-      const query = request.toLowerCase()
+        const query =
+          request.toLowerCase()
 
-      const matchText =
-        productName.includes(query) ||
-        sellerName.includes(query)
+        const matchText =
+          productName.includes(query) ||
+          sellerName.includes(query)
 
-      const totalPrice =
-        (Number(seller.price) || 0) * quantity
+        const totalPrice =
+          (Number(seller.price) || 0) *
+          quantity
 
-      const matchBudget =
-        budget
+        const matchBudget = budget
           ? totalPrice <= Number(budget)
           : true
 
-      return matchText && matchBudget
-    })
+        return (
+          matchText &&
+          matchBudget
+        )
+      }
+    )
 
     setMatches(results)
 
     if (results.length === 0) {
-      showToast("No vendors found within that budget")
+      showToast(
+        "No vendors found within that budget"
+      )
     }
   }
 
   // --------------------------------------------------
-  // Navigate Home
+  // Home
   // --------------------------------------------------
 
   const goHome = () => {
@@ -328,12 +380,14 @@ export default function App() {
     clearSearch()
   }
 
+  // --------------------------------------------------
+  // Render
+  // --------------------------------------------------
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans antialiased selection:bg-indigo-500 selection:text-white">
 
-      {/* ==================================================
-          TOAST
-      ================================================== */}
+      {/* TOAST */}
 
       {toast && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 rounded-full bg-slate-900/95 backdrop-blur-xl px-5 py-2.5 text-xs font-bold text-white shadow-2xl border border-slate-800">
@@ -342,17 +396,13 @@ export default function App() {
         </div>
       )}
 
-      {/* ==================================================
-          TOP NAVBAR
-      ================================================== */}
+      {/* HEADER */}
 
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-slate-200/80">
 
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-3">
 
           <div className="flex items-center justify-between gap-4">
-
-            {/* Logo */}
 
             <button
               onClick={goHome}
@@ -379,10 +429,11 @@ export default function App() {
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                   <span>Local price comparison</span>
                 </p>
+
               </div>
             </button>
 
-            {/* Desktop Navigation */}
+            {/* DESKTOP NAV */}
 
             <div className="hidden lg:flex items-center gap-2">
 
@@ -400,7 +451,8 @@ export default function App() {
               <button
                 onClick={() => setPage("vendors")}
                 className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
-                  page === "vendors" || page === "store"
+                  page === "vendors" ||
+                  page === "store"
                     ? "bg-indigo-50 text-indigo-700"
                     : "text-slate-500 hover:bg-slate-100"
                 }`}
@@ -420,14 +472,18 @@ export default function App() {
               </button>
 
               <button
-                onClick={() => setPage("baiskit")}
+                onClick={() =>
+                  setPage("baiskit")
+                }
                 className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-slate-800 transition"
               >
                 ✨ Demand
               </button>
 
               <button
-                onClick={() => setPage("basket")}
+                onClick={() =>
+                  setPage("basket")
+                }
                 className="relative rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-indigo-700 transition"
               >
                 🛒 Basket
@@ -435,19 +491,23 @@ export default function App() {
                 {cart.length > 0 && (
                   <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-black text-white">
                     {cart.reduce(
-                      (s, i) => s + (i.qty || 1),
+                      (s, i) =>
+                        s + (i.qty || 1),
                       0
                     )}
                   </span>
                 )}
+
               </button>
 
             </div>
 
-            {/* Mobile Demand */}
+            {/* MOBILE DEMAND */}
 
             <button
-              onClick={() => setPage("baiskit")}
+              onClick={() =>
+                setPage("baiskit")
+              }
               className="lg:hidden flex items-center gap-1.5 rounded-full bg-slate-900 px-3.5 py-1.5 text-xs font-bold text-white shadow-md"
             >
               ✨ Demand
@@ -455,9 +515,7 @@ export default function App() {
 
           </div>
 
-          {/* ==================================================
-              SEARCH BAR
-          ================================================== */}
+          {/* SEARCH */}
 
           <div className="mt-3 relative">
 
@@ -483,7 +541,9 @@ export default function App() {
               type="text"
               placeholder="Search a product & compare prices..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) =>
+                setSearch(e.target.value)
+              }
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   searchBaiskit()
@@ -519,9 +579,7 @@ export default function App() {
 
       </header>
 
-      {/* ==================================================
-          MAIN CONTENT
-      ================================================== */}
+      {/* MAIN */}
 
       <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-5 pb-28 lg:pb-10">
 
@@ -535,17 +593,20 @@ export default function App() {
             <div className="flex items-center justify-between mb-5">
 
               <div>
+
                 <h2 className="text-2xl font-black tracking-tight text-slate-900">
                   Your Basket
                 </h2>
 
                 <p className="text-xs font-medium text-slate-500">
                   {cart.reduce(
-                    (s, i) => s + (i.qty || 1),
+                    (s, i) =>
+                      s + (i.qty || 1),
                     0
                   )}{" "}
                   items in your cart
                 </p>
+
               </div>
 
               {cart.length > 0 && (
@@ -576,7 +637,9 @@ export default function App() {
                 </p>
 
                 <button
-                  onClick={() => setPage("home")}
+                  onClick={() =>
+                    setPage("home")
+                  }
                   className="mt-5 rounded-2xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-600/25"
                 >
                   Browse Products
@@ -631,7 +694,10 @@ export default function App() {
 
                           <button
                             onClick={() =>
-                              updateCartQty(item.id, -1)
+                              updateCartQty(
+                                item.id,
+                                -1
+                              )
                             }
                             className="h-6 w-6 rounded-lg bg-white text-xs font-bold text-slate-700 shadow-sm"
                           >
@@ -644,7 +710,10 @@ export default function App() {
 
                           <button
                             onClick={() =>
-                              updateCartQty(item.id, 1)
+                              updateCartQty(
+                                item.id,
+                                1
+                              )
                             }
                             className="h-6 w-6 rounded-lg bg-white text-xs font-bold text-slate-700 shadow-sm"
                           >
@@ -654,7 +723,9 @@ export default function App() {
                         </div>
 
                         <button
-                          onClick={() => removeItem(item.id)}
+                          onClick={() =>
+                            removeItem(item.id)
+                          }
                           className="p-1.5 text-slate-400 hover:text-rose-500"
                         >
                           ✕
@@ -668,8 +739,6 @@ export default function App() {
 
                 </div>
 
-                {/* Bill */}
-
                 <div className="space-y-4">
 
                   <div className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm flex gap-2">
@@ -679,7 +748,9 @@ export default function App() {
                       placeholder="Voucher: BAISKIT20"
                       value={promoCode}
                       onChange={(e) =>
-                        setPromoCode(e.target.value)
+                        setPromoCode(
+                          e.target.value
+                        )
                       }
                       className="flex-1 rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-800 outline-none"
                     />
@@ -696,31 +767,50 @@ export default function App() {
                   <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-2.5">
 
                     <div className="flex justify-between text-xs text-slate-500">
-                      <span>Subtotal</span>
+
+                      <span>
+                        Subtotal
+                      </span>
+
                       <span className="font-bold text-slate-800">
                         ₹{subtotal}
                       </span>
+
                     </div>
 
                     {discountAmount > 0 && (
                       <div className="flex justify-between text-xs text-emerald-600">
-                        <span>Voucher Discount</span>
-                        <span className="font-bold">
-                          -₹{Math.round(discountAmount)}
+
+                        <span>
+                          Voucher Discount
                         </span>
+
+                        <span className="font-bold">
+                          -₹
+                          {Math.round(
+                            discountAmount
+                          )}
+                        </span>
+
                       </div>
                     )}
 
                     <div className="flex justify-between text-xs text-slate-500">
-                      <span>Delivery</span>
+
+                      <span>
+                        Delivery
+                      </span>
+
                       <span className="font-bold text-emerald-600">
                         FREE
                       </span>
+
                     </div>
 
                     <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
 
                       <div>
+
                         <p className="text-xs font-black text-slate-900">
                           Total Payable
                         </p>
@@ -728,10 +818,14 @@ export default function App() {
                         <p className="text-[10px] text-slate-400">
                           Taxes Included
                         </p>
+
                       </div>
 
                       <span className="text-xl font-black text-indigo-600">
-                        ₹{Math.round(grandTotal)}
+                        ₹
+                        {Math.round(
+                          grandTotal
+                        )}
                       </span>
 
                     </div>
@@ -755,7 +849,7 @@ export default function App() {
         )}
 
         {/* ==================================================
-            DEMAND CREATOR
+            DEMAND
         ================================================== */}
 
         {page === "baiskit" && (
@@ -790,7 +884,9 @@ export default function App() {
                   placeholder="e.g. Wireless Earbuds, Study Desk..."
                   value={request}
                   onChange={(e) =>
-                    setRequest(e.target.value)
+                    setRequest(
+                      e.target.value
+                    )
                   }
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white"
                 />
@@ -816,29 +912,36 @@ export default function App() {
                   placeholder="e.g. 1500"
                   value={budget}
                   onChange={(e) =>
-                    setBudget(e.target.value)
+                    setBudget(
+                      e.target.value
+                    )
                   }
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white"
                 />
 
                 <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
 
-                  {["1000", "1500", "2000", "3000"].map(
-                    (amt) => (
-                      <button
-                        key={amt}
-                        type="button"
-                        onClick={() => setBudget(amt)}
-                        className={`rounded-xl px-3 py-1 text-xs font-bold transition ${
-                          budget === amt
-                            ? "bg-indigo-600 text-white"
-                            : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        ₹{amt}
-                      </button>
-                    )
-                  )}
+                  {[
+                    "1000",
+                    "1500",
+                    "2000",
+                    "3000"
+                  ].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() =>
+                        setBudget(amt)
+                      }
+                      className={`rounded-xl px-3 py-1 text-xs font-bold transition ${
+                        budget === amt
+                          ? "bg-indigo-600 text-white"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      ₹{amt}
+                    </button>
+                  ))}
 
                 </div>
 
@@ -858,7 +961,10 @@ export default function App() {
                       type="button"
                       onClick={() =>
                         setQuantity(
-                          Math.max(1, quantity - 1)
+                          Math.max(
+                            1,
+                            quantity - 1
+                          )
                         )
                       }
                       className="h-8 w-8 rounded-xl bg-white font-bold text-slate-700 shadow-sm"
@@ -873,7 +979,9 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() =>
-                        setQuantity(quantity + 1)
+                        setQuantity(
+                          quantity + 1
+                        )
                       }
                       className="h-8 w-8 rounded-xl bg-white font-bold text-slate-700 shadow-sm"
                     >
@@ -899,8 +1007,6 @@ export default function App() {
 
             </div>
 
-            {/* Match Results */}
-
             {matches.length > 0 && (
 
               <div className="mt-6 space-y-3">
@@ -908,7 +1014,9 @@ export default function App() {
                 <div className="flex justify-between items-center">
 
                   <h3 className="text-sm font-black text-slate-900">
-                    Found {matches.length} Verified Offers
+                    Found{" "}
+                    {matches.length}{" "}
+                    Verified Offers
                   </h3>
 
                   <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
@@ -919,89 +1027,95 @@ export default function App() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 
-                  {matches.map((seller) => (
+                  {matches.map(
+                    (seller) => (
 
-                    <div
-                      key={seller.id}
-                      className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm"
-                    >
+                      <div
+                        key={seller.id}
+                        className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm"
+                      >
 
-                      <div className="flex justify-between items-start">
+                        <div className="flex justify-between items-start">
 
-                        <div>
+                          <div>
 
-                          <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5">
 
-                            <h4 className="font-black text-xs text-slate-900">
-                              {seller.name}
-                            </h4>
+                              <h4 className="font-black text-xs text-slate-900">
+                                {seller.name}
+                              </h4>
 
-                            {seller.verified && (
-                              <span className="h-3.5 w-3.5 rounded-full bg-blue-500 text-[8px] text-white flex items-center justify-center font-bold">
-                                ✓
-                              </span>
-                            )}
+                              {seller.verified && (
+                                <span className="h-3.5 w-3.5 rounded-full bg-blue-500 text-[8px] text-white flex items-center justify-center font-bold">
+                                  ✓
+                                </span>
+                              )}
+
+                            </div>
+
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {seller.type} •{" "}
+                              {seller.distance}
+                            </p>
 
                           </div>
 
-                          <p className="text-[11px] text-slate-500 mt-0.5">
-                            {seller.type} • {seller.distance}
-                          </p>
+                          <span className="text-xs font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-lg">
+                            ⭐{" "}
+                            {seller.rating}
+                          </span>
 
                         </div>
 
-                        <span className="text-xs font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-lg">
-                          ⭐ {seller.rating}
-                        </span>
+                        <div className="mt-3 border-t border-slate-100 pt-3 flex justify-between items-center">
+
+                          <div>
+
+                            <p className="text-[10px] uppercase font-bold text-slate-400">
+                              Offer Price
+                            </p>
+
+                            <p className="text-lg font-black text-indigo-600">
+                              ₹{seller.price}
+                            </p>
+
+                          </div>
+
+                          <div className="flex gap-2">
+
+                            <button
+                              onClick={() => {
+                                setSelectedVendor(
+                                  seller.name
+                                )
+                                setPage(
+                                  "store"
+                                )
+                              }}
+                              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700"
+                            >
+                              Visit Store
+                            </button>
+
+                            <button
+                              onClick={() =>
+                                showToast(
+                                  `Connecting to ${seller.name}...`
+                                )
+                              }
+                              className="rounded-xl bg-slate-900 px-3.5 py-1.5 text-xs font-bold text-white"
+                            >
+                              Lock Deal
+                            </button>
+
+                          </div>
+
+                        </div>
 
                       </div>
 
-                      <div className="mt-3 border-t border-slate-100 pt-3 flex justify-between items-center">
-
-                        <div>
-
-                          <p className="text-[10px] uppercase font-bold text-slate-400">
-                            Offer Price
-                          </p>
-
-                          <p className="text-lg font-black text-indigo-600">
-                            ₹{seller.price}
-                          </p>
-
-                        </div>
-
-                        <div className="flex gap-2">
-
-                          <button
-                            onClick={() => {
-                              setSelectedVendor(
-                                seller.name
-                              )
-                              setPage("store")
-                            }}
-                            className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700"
-                          >
-                            Visit Store
-                          </button>
-
-                          <button
-                            onClick={() =>
-                              showToast(
-                                `Connecting to ${seller.name}...`
-                              )
-                            }
-                            className="rounded-xl bg-slate-900 px-3.5 py-1.5 text-xs font-bold text-white"
-                          >
-                            Lock Deal
-                          </button>
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                  ))}
+                    )
+                  )}
 
                 </div>
 
@@ -1013,46 +1127,62 @@ export default function App() {
         )}
 
         {/* ==================================================
-            VENDORS
-        ================================================== */}
+    VENDORS
+================================================== */}
 
-        {page === "vendors" && (
-          <section className="animate-in fade-in duration-300 max-w-6xl mx-auto">
+{page === "vendors" && (
+  <section className="animate-in fade-in duration-300 max-w-6xl mx-auto">
 
-            <div className="mb-5">
+    <div className="mb-5">
+      <h2 className="text-2xl font-black tracking-tight text-slate-900">
+        Nearby Stores 🏪
+      </h2>
 
-              <h2 className="text-2xl font-black tracking-tight text-slate-900">
-                Local Verified Stores 🏪
-              </h2>
+      <p className="text-xs text-slate-500 mt-0.5">
+        Real physical stores found near your location
+      </p>
+    </div>
 
-              <p className="text-xs text-slate-500 mt-0.5">
-                Top-rated physical neighborhood retailers with instant pickup
-              </p>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
 
-            </div>
+      {apiResults?.nearbyVendors?.length > 0 ? (
+        apiResults.nearbyVendors.map((vendor, index) => (
+          <VendorCard
+            key={vendor.id || `${vendor.name}-${index}`}
+            name={vendor.name}
+            type={vendor.type || "Local Store"}
+            distance={vendor.distance}
+            rating={vendor.rating}
+            totalRatings={vendor.totalRatings}
+address={vendor.address}
+openNow={vendor.openNow}
+            onView={() => {
+              if (vendor.mapsUrl) {
+                window.open(
+                  vendor.mapsUrl,
+                  "_blank",
+                  "noopener,noreferrer"
+                )
+              }
+            }}
+          />
+        ))
+      ) : (
+        <div className="col-span-full rounded-2xl border border-slate-200 bg-white p-8 text-center">
+          <p className="text-sm font-bold text-slate-700">
+            No nearby stores found
+          </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          <p className="text-xs text-slate-400 mt-1">
+            Search for a product first to find nearby physical stores.
+          </p>
+        </div>
+      )}
 
-              {sellers.map((vendor) => (
+    </div>
 
-                <VendorCard
-                  key={vendor.id}
-                  name={vendor.name}
-                  type={vendor.type}
-                  distance={vendor.distance}
-                  rating={vendor.rating}
-                  onView={() => {
-                    setSelectedVendor(vendor.name)
-                    setPage("store")
-                  }}
-                />
-
-              ))}
-
-            </div>
-
-          </section>
-        )}
+  </section>
+)}
 
         {/* ==================================================
             STORE
@@ -1062,7 +1192,9 @@ export default function App() {
           <section className="animate-in fade-in duration-300 max-w-4xl mx-auto">
 
             <button
-              onClick={() => setPage("vendors")}
+              onClick={() =>
+                setPage("vendors")
+              }
               className="mb-4 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm"
             >
               ← Back to Stores
@@ -1077,7 +1209,8 @@ export default function App() {
                   <div className="flex items-center gap-2">
 
                     <h2 className="text-xl font-black text-slate-900">
-                      {selectedVendor || "Local Merchant"}
+                      {selectedVendor ||
+                        "Local Merchant"}
                     </h2>
 
                     <span className="h-4 w-4 rounded-full bg-blue-600 text-[9px] text-white flex items-center justify-center font-bold">
@@ -1128,7 +1261,10 @@ export default function App() {
                 <button
                   onClick={() =>
                     showToast(
-                      `Calling ${selectedVendor || "store"}...`
+                      `Calling ${
+                        selectedVendor ||
+                        "store"
+                      }...`
                     )
                   }
                   className="rounded-2xl border border-slate-200 bg-slate-50 py-2.5 text-xs font-bold text-slate-700"
@@ -1138,7 +1274,9 @@ export default function App() {
 
                 <button
                   onClick={() =>
-                    showToast("Opening Live Chat...")
+                    showToast(
+                      "Opening Live Chat..."
+                    )
                   }
                   className="rounded-2xl bg-slate-900 py-2.5 text-xs font-bold text-white"
                 >
@@ -1188,7 +1326,9 @@ export default function App() {
                 </p>
 
                 <button
-                  onClick={() => setPage("home")}
+                  onClick={() =>
+                    setPage("home")
+                  }
                   className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white"
                 >
                   Start Shopping
@@ -1200,12 +1340,14 @@ export default function App() {
 
               <div className="space-y-3.5">
 
-                {orders.map((order) => (
-                  <OrderCard
-                    key={order.id}
-                    order={order}
-                  />
-                ))}
+                {orders.map(
+                  (order) => (
+                    <OrderCard
+                      key={order.id}
+                      order={order}
+                    />
+                  )
+                )}
 
               </div>
 
@@ -1222,14 +1364,12 @@ export default function App() {
 
           <div className="animate-in fade-in duration-300 space-y-6">
 
-            {/* Loading */}
+            {/* LOADING */}
 
             {isLoading && (
-
               <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-100 text-center text-xs font-bold text-indigo-700 animate-pulse">
-                🔍 Searching best deals across nearby stores...
+                🔍 Searching online prices, Baiskit listings & nearby stores...
               </div>
-
             )}
 
             {/* ==================================================
@@ -1240,15 +1380,17 @@ export default function App() {
 
               <section className="rounded-3xl border border-indigo-100 bg-gradient-to-b from-indigo-50/50 to-white p-4 sm:p-5 shadow-sm space-y-4">
 
-                {/* Header */}
+                {/* HEADER */}
 
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 
                   <div>
 
                     <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
 
-                      <span>Baiskit Price Match</span>
+                      <span>
+                        Baiskit Price Match
+                      </span>
 
                       <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
                         LIVE
@@ -1257,103 +1399,156 @@ export default function App() {
                     </h2>
 
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {apiResults.totalPriceResults ?? 0} verified price results for "{search}"
+                      {apiResults.totalPriceResults ??
+                        0}{" "}
+                      price results for "
+                      {search}"
                     </p>
 
                   </div>
 
                   <button
-                    onClick={() => setApiResults(null)}
-                    className="shrink-0 text-xs font-bold text-slate-400 hover:text-slate-600 bg-white border border-slate-200 px-2.5 py-1 rounded-xl"
+                    onClick={() =>
+                      setApiResults(null)
+                    }
+                    className="self-start sm:self-auto shrink-0 text-xs font-bold text-slate-400 hover:text-slate-600 bg-white border border-slate-200 px-2.5 py-1 rounded-xl"
                   >
                     ✕ Close
                   </button>
 
                 </div>
 
-                {/* ==================================================
-                    LOWEST OVERALL
-                ================================================== */}
+                {/* RESULT COUNTS */}
 
-                {apiResults.comparison?.lowestOverall && (
+                <div className="grid grid-cols-3 gap-2">
 
-                  <div className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 p-4 text-white shadow-md">
+                  <div className="rounded-2xl bg-white border border-slate-200 p-3 text-center shadow-sm">
 
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <p className="text-lg font-black text-blue-600">
+                      {apiResults.onlineCount ??
+                        0}
+                    </p>
 
-                      <div>
-
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-100">
-                          🏆 Lowest Price Found
-                        </p>
-
-                        <h3 className="mt-1 text-sm font-black">
-                          {apiResults.comparison.lowestOverall.seller ||
-                            apiResults.comparison.lowestOverall.platform ||
-                            "Baiskit Seller"}
-                        </h3>
-
-                        {apiResults.comparison.lowestOverall.condition && (
-                          <p className="text-[11px] text-indigo-100 mt-0.5">
-                            {apiResults.comparison.lowestOverall.condition}
-                          </p>
-                        )}
-
-                      </div>
-
-                      <div className="sm:text-right">
-
-                        <p className="text-2xl font-black">
-                          ₹{apiResults.comparison.lowestOverall.price}
-                        </p>
-
-                        <p className="text-[10px] text-indigo-100">
-                          {apiResults.comparison.lowestOverall.type}
-                        </p>
-
-                      </div>
-
-                    </div>
-
-                    <button
-                      onClick={() => {
-
-                        const deal =
-                          apiResults.comparison.lowestOverall
-
-                        addToCart({
-                          id: `compare-${Date.now()}`,
-                          name: `${search} ${
-                            deal.condition
-                              ? `(${deal.condition})`
-                              : ""
-                          }`,
-                          price: deal.price,
-                          vendor:
-                            deal.seller ||
-                            deal.platform ||
-                            "Baiskit",
-                          image:
-                            "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=200&q=80"
-                        })
-
-                      }}
-                      className="w-full mt-3 rounded-xl bg-white py-2 text-xs font-black text-indigo-700 hover:bg-indigo-50 transition"
-                    >
-                      Add Lowest Price to Basket 🛒
-                    </button>
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                      Online
+                    </p>
 
                   </div>
 
-                )}
+                  <div className="rounded-2xl bg-white border border-slate-200 p-3 text-center shadow-sm">
 
-                {/* ==================================================
-                    PRICE CATEGORIES
-                ================================================== */}
+                    <p className="text-lg font-black text-indigo-600">
+                      {apiResults.localCount ??
+                        0}
+                    </p>
+
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                      Local
+                    </p>
+
+                  </div>
+
+                  <div className="rounded-2xl bg-white border border-slate-200 p-3 text-center shadow-sm">
+
+                    <p className="text-lg font-black text-emerald-600">
+                      {apiResults.secondHandCount ??
+                        0}
+                    </p>
+
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                      Second-Hand
+                    </p>
+
+                  </div>
+
+                </div>
+
+               {/* LOWEST OVERALL */}
+
+{apiResults.comparison?.lowestOverall && (() => {
+  const deal = apiResults.comparison.lowestOverall
+  const isOnline = deal.type === "online"
+
+  return (
+    <div className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 p-4 text-white shadow-md">
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+
+        <div>
+
+          <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-100">
+            🏆 Lowest Price Found
+          </p>
+
+          <h3 className="mt-1 text-sm font-black">
+            {deal.seller || deal.platform || "Baiskit Seller"}
+          </h3>
+
+          {deal.condition && (
+            <p className="text-[11px] text-indigo-100 mt-0.5">
+              {deal.condition}
+            </p>
+          )}
+
+        </div>
+
+        <div className="sm:text-right">
+
+          <p className="text-2xl font-black">
+            ₹{deal.price}
+          </p>
+
+          <p className="text-[10px] text-indigo-100 capitalize">
+            {deal.type}
+          </p>
+
+        </div>
+
+      </div>
+
+      {isOnline && deal.url ? (
+        <a
+          href={deal.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block w-full mt-3 rounded-xl bg-white py-2 text-center text-xs font-black text-indigo-700 hover:bg-indigo-50 transition"
+        >
+          View Lowest Online Deal →
+        </a>
+      ) : (
+        <button
+          onClick={() => {
+            addToCart({
+              id: `compare-${Date.now()}`,
+              name: `${search}${
+                deal.condition
+                  ? ` (${deal.condition})`
+                  : ""
+              }`,
+              price: deal.price,
+              vendor:
+                deal.seller ||
+                deal.platform ||
+                "Baiskit",
+              image:
+                "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=200&q=80"
+            })
+          }}
+          className="w-full mt-3 rounded-xl bg-white py-2 text-xs font-black text-indigo-700 hover:bg-indigo-50 transition"
+        >
+          Add Lowest Price to Basket 🛒
+        </button>
+      )}
+
+    </div>
+  )
+})()}
+
+                {/* PRICE CATEGORIES */}
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
 
-                  {/* Local */}
+                  {/* LOCAL */}
 
                   <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm">
 
@@ -1361,20 +1556,29 @@ export default function App() {
                       🏪 Lowest Local
                     </p>
 
-                    {apiResults.comparison?.lowestLocal ? (
+                    {apiResults.comparison
+                      ?.lowestLocal ? (
 
                       <>
                         <h3 className="mt-2 text-xs font-black text-slate-900">
-                          {apiResults.comparison.lowestLocal.seller}
+                          {apiResults.comparison.lowestLocal.seller ||
+                            apiResults.comparison.lowestLocal.platform}
                         </h3>
 
                         <p className="text-lg font-black text-indigo-600 mt-1">
-                          ₹{apiResults.comparison.lowestLocal.price}
+                          ₹
+                          {
+                            apiResults.comparison
+                              .lowestLocal
+                              .price
+                          }
                         </p>
 
                         <p className="text-[10px] text-slate-500 mt-1">
-                          {apiResults.comparison.lowestLocal.distance ||
-                            "Nearby"}
+                          {apiResults.comparison
+                            .lowestLocal
+                            .distance ||
+                            "Baiskit listing"}
                         </p>
                       </>
 
@@ -1388,7 +1592,7 @@ export default function App() {
 
                   </div>
 
-                  {/* Second Hand */}
+                  {/* SECOND HAND */}
 
                   <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm">
 
@@ -1396,19 +1600,29 @@ export default function App() {
                       ♻️ Lowest Second-Hand
                     </p>
 
-                    {apiResults.comparison?.lowestSecondHand ? (
+                    {apiResults.comparison
+                      ?.lowestSecondHand ? (
 
                       <>
                         <h3 className="mt-2 text-xs font-black text-slate-900">
-                          {apiResults.comparison.lowestSecondHand.seller}
+                          {apiResults.comparison.lowestSecondHand.seller ||
+                            apiResults.comparison.lowestSecondHand.platform}
                         </h3>
 
                         <p className="text-lg font-black text-emerald-600 mt-1">
-                          ₹{apiResults.comparison.lowestSecondHand.price}
+                          ₹
+                          {
+                            apiResults.comparison
+                              .lowestSecondHand
+                              .price
+                          }
                         </p>
 
                         <p className="text-[10px] text-slate-500 mt-1">
-                          {apiResults.comparison.lowestSecondHand.condition}
+                          {apiResults.comparison
+                            .lowestSecondHand
+                            .condition ||
+                            "Second-hand"}
                         </p>
                       </>
 
@@ -1422,7 +1636,7 @@ export default function App() {
 
                   </div>
 
-                  {/* Online */}
+                  {/* ONLINE */}
 
                   <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm">
 
@@ -1430,16 +1644,45 @@ export default function App() {
                       🌐 Lowest Online
                     </p>
 
-                    {apiResults.comparison?.lowestOnline ? (
+                    {apiResults.comparison
+                      ?.lowestOnline ? (
 
                       <>
                         <h3 className="mt-2 text-xs font-black text-slate-900">
-                          {apiResults.comparison.lowestOnline.platform}
+                          {
+                            apiResults.comparison
+                              .lowestOnline
+                              .platform
+                          }
                         </h3>
 
                         <p className="text-lg font-black text-blue-600 mt-1">
-                          ₹{apiResults.comparison.lowestOnline.price}
+                          ₹
+                          {
+                            apiResults.comparison
+                              .lowestOnline
+                              .price
+                          }
                         </p>
+
+                        {apiResults.comparison
+                          .lowestOnline
+                          .url && (
+                          <a
+                            href={
+                              apiResults
+                                .comparison
+                                .lowestOnline
+                                .url
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block mt-2 text-[10px] font-bold text-blue-600 hover:underline"
+                          >
+                            View Online Deal →
+                          </a>
+                        )}
+
                       </>
 
                     ) : (
@@ -1454,67 +1697,295 @@ export default function App() {
 
                 </div>
 
-                {/* ==================================================
-                    ALL PRICE RESULTS
-                ================================================== */}
+                {/* ALL PRICE RESULTS */}
 
-                {apiResults.priceResults?.length > 0 && (
+                {apiResults.priceResults
+                  ?.length > 0 && (
 
                   <div className="space-y-2">
 
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                      All Available Prices
-                    </p>
+                    <div className="flex items-center justify-between">
+
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        All Available Prices
+                      </p>
+
+                      <span className="text-[10px] text-slate-400">
+                        {
+                          apiResults
+                            .priceResults
+                            .length
+                        }{" "}
+                        offers
+                      </span>
+
+                    </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
 
                       {apiResults.priceResults.map(
-                        (item, index) => (
+                        (item, index) => {
+
+                          const isOnline =
+                            item.type ===
+                            "online"
+
+                          const isSecondHand =
+                            item.type ===
+                            "second-hand"
+
+                          return (
+                            <div
+                              key={`${item.seller || item.platform || "price"}-${index}`}
+                              className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm"
+                            >
+
+                              <div className="flex items-start justify-between gap-3">
+
+                                <div className="min-w-0">
+
+                                  <div className="flex items-center gap-2">
+
+                                    <h4 className="text-xs font-bold text-slate-900 truncate">
+                                      {item.seller ||
+                                        item.platform ||
+                                        "Seller"}
+                                    </h4>
+
+                                    <span
+                                      className={`shrink-0 rounded-full px-2 py-0.5 text-[8px] font-black uppercase ${
+                                        isOnline
+                                          ? "bg-blue-50 text-blue-600"
+                                          : isSecondHand
+                                          ? "bg-emerald-50 text-emerald-700"
+                                          : "bg-indigo-50 text-indigo-700"
+                                      }`}
+                                    >
+                                      {isOnline
+                                        ? "Online"
+                                        : isSecondHand
+                                        ? "Second-Hand"
+                                        : "Local"}
+                                    </span>
+
+                                  </div>
+
+                                  <p className="text-[10px] text-slate-500 mt-1 truncate">
+                                    {item.product ||
+                                      search}
+                                  </p>
+
+                                  <p className="text-[10px] text-slate-400 mt-0.5">
+                                    {item.condition ||
+                                      ""}
+
+                                    {item.distance
+                                      ? ` • ${item.distance}`
+                                      : ""}
+                                  </p>
+
+                                </div>
+
+                                <div className="text-right shrink-0">
+
+                                  <p className="text-sm font-black text-slate-900">
+                                    ₹
+                                    {item.price}
+                                  </p>
+
+                                  {item.rating && (
+                                    <p className="text-[9px] text-amber-500 font-bold">
+                                      ⭐{" "}
+                                      {item.rating}
+                                    </p>
+                                  )}
+
+                                </div>
+
+                              </div>
+
+                              <div className="mt-2.5 flex items-center justify-between gap-2">
+
+                                <span className="text-[9px] font-bold text-slate-400">
+                                  {item.source ||
+                                    "Baiskit"}
+                                </span>
+
+                                {isOnline &&
+                                item.url ? (
+
+                                  <a
+                                    href={
+                                      item.url
+                                    }
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="rounded-lg bg-blue-600 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-blue-700 transition"
+                                  >
+                                    View Deal →
+                                  </a>
+
+                                ) : (
+
+                                  <button
+                                    onClick={() => {
+
+                                      addToCart({
+                                        id: `compare-${Date.now()}-${index}`,
+                                        name:
+                                          item.product ||
+                                          search,
+                                        price:
+                                          item.price,
+                                        vendor:
+                                          item.seller ||
+                                          item.platform ||
+                                          "Baiskit",
+                                        image:
+                                          "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=200&q=80"
+                                      })
+
+                                    }}
+                                    className="rounded-lg bg-slate-900 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-slate-800 transition"
+                                  >
+                                    Add to Basket
+                                  </button>
+
+                                )}
+
+                              </div>
+
+                            </div>
+                          )
+                        }
+                      )}
+
+                    </div>
+
+                  </div>
+
+                )}
+
+                {/* NO PRICE RESULTS */}
+
+                {!apiResults.priceResults
+                  ?.length && (
+
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center">
+
+                    <p className="text-sm font-bold text-slate-700">
+                      No price results found
+                    </p>
+
+                    <p className="mt-1 text-xs text-slate-400">
+                      Try another product name or a more specific model.
+                    </p>
+
+                  </div>
+
+                )}
+
+                {/* NEARBY VENDORS */}
+
+                {apiResults.nearbyVendors
+                  ?.length > 0 && (
+
+                  <div className="space-y-2">
+
+                    <div className="flex items-center justify-between">
+
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        Nearby Stores
+                      </p>
+
+                      <span className="text-[10px] text-slate-400">
+                        {
+                          apiResults
+                            .nearbyVendors
+                            .length
+                        }{" "}
+                        found
+                      </span>
+
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+
+                      {apiResults.nearbyVendors.map(
+                        (vendor, index) => (
 
                           <div
-                            key={`${
-                              item.seller ||
-                              item.platform ||
-                              "price"
-                            }-${index}`}
-                            className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm"
+                            key={`${vendor.name || "vendor"}-${index}`}
+                            className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
                           >
 
-                            <div className="min-w-0">
+                            <div className="flex items-start justify-between gap-3">
 
-                              <h4 className="text-xs font-bold text-slate-900 truncate">
-                                {item.seller ||
-                                  item.platform ||
-                                  "Seller"}
-                              </h4>
+                              <div className="min-w-0">
 
-                              <p className="text-[10px] text-slate-500 mt-0.5">
-                                {item.type}
+                                <h4 className="text-xs font-black text-slate-900 truncate">
+                                  {vendor.name ||
+                                    "Nearby Store"}
+                                </h4>
 
-                                {item.condition
-                                  ? ` • ${item.condition}`
-                                  : ""}
-
-                                {item.distance
-                                  ? ` • ${item.distance}`
-                                  : ""}
-                              </p>
-
-                            </div>
-
-                            <div className="text-right shrink-0">
-
-                              <p className="text-sm font-black text-slate-900">
-                                ₹{item.price}
-                              </p>
-
-                              {item.source && (
-                                <p className="text-[9px] font-bold text-emerald-600">
-                                  ✓ {item.source}
+                                <p className="mt-1 text-[10px] text-slate-500">
+                                  {vendor.address ||
+                                    "Local store"}
                                 </p>
-                              )}
+
+                                {vendor.distance && (
+                                  <p className="mt-1 text-[10px] font-bold text-indigo-600">
+                                    📍{" "}
+                                    {
+                                      vendor.distance
+                                    }
+                                  </p>
+                                )}
+
+                              </div>
+
+                              <div className="shrink-0 text-right">
+
+                                {vendor.rating && (
+                                  <p className="text-[9px] font-bold text-amber-500">
+                                    ⭐{" "}
+                                    {
+                                      vendor.rating
+                                    }
+                                  </p>
+                                )}
+
+                                {vendor.openNow !==
+                                  undefined && (
+                                  <p
+                                    className={`mt-1 text-[9px] font-bold ${
+                                      vendor.openNow
+                                        ? "text-emerald-600"
+                                        : "text-rose-500"
+                                    }`}
+                                  >
+                                    {vendor.openNow
+                                      ? "Open"
+                                      : "Closed"}
+                                  </p>
+                                )}
+
+                              </div>
 
                             </div>
+
+                            {vendor.mapsUrl && (
+                              <a
+                                href={
+                                  vendor.mapsUrl
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-block mt-2 text-[10px] font-bold text-indigo-600 hover:underline"
+                              >
+                                Open in Maps →
+                              </a>
+                            )}
 
                           </div>
 
@@ -1527,67 +1998,64 @@ export default function App() {
 
                 )}
 
-                {/* ==================================================
-                    NEARBY VENDORS
-                ================================================== */}
+              </section>
 
-                {apiResults.nearbyVendors?.length > 0 && (
+            )}
 
-                  <div className="space-y-2">
+            {/* PRODUCT FEED */}
 
-                    <div className="flex items-center justify-between">
+            {!apiResults && (
 
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        Nearby Stores
-                      </p>
+              <section className="space-y-4">
 
-                      <span className="text-[10px] text-slate-400">
-                        Within 5 km
-                      </span>
+                <div>
 
+                  <h2 className="text-lg font-black text-slate-900">
+                    Explore Products
+                  </h2>
+
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Browse available Baiskit products
+                  </p>
+
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                  {filteredProducts.map(
+                    (product) => (
+
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        onAdd={() =>
+                          addToCart(
+                            product
+                          )
+                        }
+                      />
+
+                    )
+                  )}
+
+                </div>
+
+                {filteredProducts.length ===
+                  0 && (
+
+                  <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-8 text-center">
+
+                    <div className="text-3xl">
+                      🔍
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <h3 className="mt-2 text-sm font-bold text-slate-800">
+                      No products found
+                    </h3>
 
-                      {apiResults.nearbyVendors
-                        .slice(0, 6)
-                        .map((vendor, index) => (
-
-                          <div
-                            key={`${vendor.name}-${index}`}
-                            className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white p-3"
-                          >
-
-                            <div className="min-w-0">
-
-                              <h4 className="text-xs font-bold text-slate-900 truncate">
-                                {vendor.name}
-                              </h4>
-
-                              <p className="text-[10px] text-slate-500 mt-0.5">
-                                {vendor.distance} • ⭐{" "}
-                                {vendor.rating ?? "N/A"}
-                              </p>
-
-                            </div>
-
-                            <span
-                              className={`shrink-0 rounded-lg px-2 py-1 text-[9px] font-bold ${
-                                vendor.openNow
-                                  ? "bg-emerald-50 text-emerald-700"
-                                  : "bg-slate-100 text-slate-500"
-                              }`}
-                            >
-                              {vendor.openNow
-                                ? "Open"
-                                : "Closed"}
-                            </span>
-
-                          </div>
-
-                        ))}
-
-                    </div>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Try searching for another product.
+                    </p>
 
                   </div>
 
@@ -1597,299 +2065,93 @@ export default function App() {
 
             )}
 
-            {/* ==================================================
-                CATEGORIES
-            ================================================== */}
-
-            <section>
-
-              <div className="flex items-center justify-between mb-3">
-
-                <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  Browse by Category
-                </h2>
-
-                {selectedCategory !== "All" && (
-                  <button
-                    onClick={() =>
-                      setSelectedCategory("All")
-                    }
-                    className="text-xs font-bold text-indigo-600 hover:underline"
-                  >
-                    Reset Filter
-                  </button>
-                )}
-
-              </div>
-
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
-
-                {[
-                  {
-                    name: "Electronics",
-                    icon: "🎧"
-                  },
-                  {
-                    name: "Home",
-                    icon: "🛋️"
-                  },
-                  {
-                    name: "Fashion",
-                    icon: "👟"
-                  },
-                  {
-                    name: "Books",
-                    icon: "📖"
-                  },
-                  {
-                    name: "Gaming",
-                    icon: "🎮"
-                  }
-                ].map((cat) => {
-
-                  const isActive =
-                    selectedCategory.toLowerCase() ===
-                    cat.name.toLowerCase()
-
-                  return (
-
-                    <button
-                      key={cat.name}
-                      onClick={() =>
-                        setSelectedCategory(
-                          isActive
-                            ? "All"
-                            : cat.name
-                        )
-                      }
-                      className={`group flex flex-col items-center justify-center rounded-2xl p-3 transition-all duration-200 ${
-                        isActive
-                          ? "bg-slate-900 text-white shadow-lg ring-2 ring-indigo-500"
-                          : "border border-slate-200/80 bg-white text-slate-700 shadow-sm hover:border-slate-300"
-                      }`}
-                    >
-
-                      <span className="text-xl group-hover:scale-110 transition">
-                        {cat.icon}
-                      </span>
-
-                      <p className="mt-1 text-[11px] font-bold">
-                        {cat.name}
-                      </p>
-
-                    </button>
-
-                  )
-                })}
-
-              </div>
-
-            </section>
-
-            {/* ==================================================
-                PROMO
-            ================================================== */}
-
-            <section>
-
-              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-900 p-5 text-white shadow-xl">
-
-                <span className="rounded-full bg-indigo-500/30 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-indigo-200 border border-indigo-500/30">
-                  Instant Deal
-                </span>
-
-                <h3 className="mt-2 text-xl font-black tracking-tight">
-                  Flat 20% Off Local Stores
-                </h3>
-
-                <p className="mt-1 text-xs text-slate-300">
-                  Use coupon{" "}
-                  <span className="font-bold text-white bg-white/15 px-1.5 py-0.5 rounded">
-                    BAISKIT20
-                  </span>{" "}
-                  at checkout.
-                </p>
-
-                <button
-                  onClick={() => {
-                    setPromoCode("BAISKIT20")
-                    showToast(
-                      "Applied code BAISKIT20!"
-                    )
-                  }}
-                  className="mt-3.5 inline-flex items-center gap-1.5 rounded-xl bg-white px-3.5 py-1.5 text-xs font-black text-slate-950 shadow"
-                >
-                  Apply Offer →
-                </button>
-
-              </div>
-
-            </section>
-
-            {/* ==================================================
-                PRODUCT FEED
-            ================================================== */}
-
-            <section>
-
-              <div className="flex items-center justify-between mb-3.5">
-
-                <div>
-
-                  <h2 className="text-base font-black tracking-tight text-slate-900">
-                    Trending Nearby
-                  </h2>
-
-                  <p className="text-[11px] text-slate-500">
-                    {filteredProducts.length} verified listings in stock
-                  </p>
-
-                </div>
-
-              </div>
-
-              {filteredProducts.length === 0 ? (
-
-                <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500">
-                  No products found matching "{search}".
-                </div>
-
-              ) : (
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5">
-
-                  {filteredProducts.map((product) => (
-
-                    <ProductCard
-                      key={product.id}
-                      product={product}
-                      onAdd={() =>
-                        addToCart(product)
-                      }
-                    />
-
-                  ))}
-
-                </div>
-
-              )}
-
-            </section>
-
           </div>
 
         )}
 
       </main>
 
-      {/* ==================================================
-          MOBILE BOTTOM NAVIGATION
-      ================================================== */}
+      {/* MOBILE NAV */}
 
-      <nav className="lg:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md rounded-3xl border border-slate-200/80 bg-white/90 backdrop-blur-2xl px-3 py-2 shadow-2xl">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden border-t border-slate-200 bg-white/95 backdrop-blur-xl">
 
-        <div className="grid grid-cols-5 items-center text-center">
-
-          {/* Home */}
+        <div className="grid grid-cols-4 px-2 py-2">
 
           <button
-            onClick={() => setPage("home")}
-            className={`flex flex-col items-center py-1 transition ${
+            onClick={() =>
+              setPage("home")
+            }
+            className={`flex flex-col items-center gap-1 rounded-xl py-2 text-[9px] font-bold ${
               page === "home"
-                ? "text-indigo-600 font-bold"
+                ? "text-indigo-600"
                 : "text-slate-400"
             }`}
           >
-            <span className="text-lg">🏠</span>
-            <span className="text-[10px] mt-0.5">
-              Home
+            <span className="text-lg">
+              🏠
             </span>
+            Home
           </button>
 
-          {/* Stores */}
-
           <button
-            onClick={() => setPage("vendors")}
-            className={`flex flex-col items-center py-1 transition ${
+            onClick={() =>
+              setPage("vendors")
+            }
+            className={`flex flex-col items-center gap-1 rounded-xl py-2 text-[9px] font-bold ${
               page === "vendors" ||
               page === "store"
-                ? "text-indigo-600 font-bold"
+                ? "text-indigo-600"
                 : "text-slate-400"
             }`}
           >
-            <span className="text-lg">🏪</span>
-            <span className="text-[10px] mt-0.5">
-              Stores
+            <span className="text-lg">
+              🏪
             </span>
+            Stores
           </button>
 
-          {/* Demand */}
-
           <button
-            onClick={() => setPage("baiskit")}
-            className="group flex flex-col items-center -mt-5"
-          >
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white shadow-xl shadow-indigo-600/35 group-hover:scale-105 transition">
-              <span className="text-xl">✨</span>
-            </div>
-
-            <span className="text-[10px] font-bold text-slate-700 mt-1">
-              Demand
-            </span>
-          </button>
-
-          {/* Basket */}
-
-          <button
-            onClick={() => setPage("basket")}
-            className={`relative flex flex-col items-center py-1 transition ${
-              page === "basket"
-                ? "text-indigo-600 font-bold"
-                : "text-slate-400"
-            }`}
-          >
-
-            <div className="relative">
-
-              <span className="text-lg">
-                🛒
-              </span>
-
-              {cart.length > 0 && (
-
-                <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-black text-white">
-                  {cart.reduce(
-                    (s, i) =>
-                      s + (i.qty || 1),
-                    0
-                  )}
-                </span>
-
-              )}
-
-            </div>
-
-            <span className="text-[10px] mt-0.5">
-              Basket
-            </span>
-
-          </button>
-
-          {/* Orders */}
-
-          <button
-            onClick={() => setPage("orders")}
-            className={`flex flex-col items-center py-1 transition ${
+            onClick={() =>
+              setPage("orders")
+            }
+            className={`flex flex-col items-center gap-1 rounded-xl py-2 text-[9px] font-bold ${
               page === "orders"
-                ? "text-indigo-600 font-bold"
+                ? "text-indigo-600"
                 : "text-slate-400"
             }`}
           >
-            <span className="text-lg">📦</span>
-
-            <span className="text-[10px] mt-0.5">
-              Orders
+            <span className="text-lg">
+              📦
             </span>
+            Orders
+          </button>
+
+          <button
+            onClick={() =>
+              setPage("basket")
+            }
+            className={`relative flex flex-col items-center gap-1 rounded-xl py-2 text-[9px] font-bold ${
+              page === "basket"
+                ? "text-indigo-600"
+                : "text-slate-400"
+            }`}
+          >
+            <span className="text-lg">
+              🛒
+            </span>
+
+            Basket
+
+            {cart.length > 0 && (
+              <span className="absolute top-0.5 right-5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[8px] font-black text-white">
+                {cart.reduce(
+                  (s, i) =>
+                    s + (i.qty || 1),
+                  0
+                )}
+              </span>
+            )}
+
           </button>
 
         </div>
