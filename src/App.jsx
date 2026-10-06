@@ -32,8 +32,76 @@ export default function App() {
   const [apiResults, setApiResults] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [userLocation, setUserLocation] = useState(null)
+  const [isSellModalOpen, setIsSellModalOpen] = useState(false)
+  const [sellItemForm, setSellItemForm] = useState({
+    name: "",
+    category: "Electronics",
+    price: "",
+    condition: "Like New (Pre-owned)",
+    seller: "",
+    sellerType: "Student / Individual",
+    distance: "0.5 km away"
+  })
 
   const toastTimerRef = useRef(null)
+
+  const handleSellSubmit = async (e) => {
+    e.preventDefault()
+    if (!sellItemForm.name || !sellItemForm.price || !sellItemForm.seller) {
+      showToast("Please fill in item name, price, and seller name")
+      return
+    }
+
+    const newItem = {
+      id: Date.now(),
+      name: sellItemForm.name,
+      category: sellItemForm.category,
+      price: Number(sellItemForm.price),
+      originalPrice: Math.round(Number(sellItemForm.price) * 1.4),
+      condition: sellItemForm.condition,
+      vendor: sellItemForm.seller,
+      seller: sellItemForm.seller,
+      sellerType: sellItemForm.sellerType,
+      rating: 5.0,
+      reviews: 1,
+      badge: "♻️ Student Second-Hand",
+      image: "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
+      distance: sellItemForm.distance,
+      verified: true
+    }
+
+    try {
+      let res
+      try {
+        res = await fetch("http://localhost:5000/api/secondhand", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(sellItemForm)
+        })
+      } catch (err) {
+        res = await fetch("https://baiskit.onrender.com/api/secondhand", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(sellItemForm)
+        })
+      }
+    } catch (err) {
+      console.warn("API post error, adding locally:", err)
+    }
+
+    products.unshift(newItem)
+    showToast(`🎉 "${newItem.name}" listed for sale!`)
+    setIsSellModalOpen(false)
+    setSellItemForm({
+      name: "",
+      category: "Electronics",
+      price: "",
+      condition: "Like New (Pre-owned)",
+      seller: "",
+      sellerType: "Student / Individual",
+      distance: "0.5 km away"
+    })
+  }
 
   // --------------------------------------------------
   // Toast
@@ -671,6 +739,13 @@ setApiResults(normalizedData)
                   {label}
                 </button>
               ))}
+
+              <button
+                onClick={() => setIsSellModalOpen(true)}
+                className="ml-1 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5"
+              >
+                ➕ Sell Pre-Owned
+              </button>
 
               <button
                 onClick={() => setPage("baiskit")}
@@ -2518,6 +2593,130 @@ setApiResults(normalizedData)
 
         </div>
       </nav>
+
+      {/* --------------------------------------------------
+          SELL SECOND-HAND ITEM MODAL
+      -------------------------------------------------- */}
+      {isSellModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg overflow-hidden rounded-[30px] border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-emerald-700">
+                  ♻️ P2P Student Marketplace
+                </span>
+                <h3 className="mt-1 text-xl font-black text-slate-900">Sell Pre-Owned Item</h3>
+                <p className="text-xs text-slate-500">List your used textbooks, electronics, desks, or gadgets for local buyers.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSellModalOpen(false)}
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSellSubmit} className="mt-4 space-y-3.5">
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Item Title</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Let Us C Textbook (17th Ed) / Sony Headphones"
+                  value={sellItemForm.name}
+                  onChange={(e) => setSellItemForm({ ...sellItemForm, name: e.target.value })}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Category</label>
+                  <select
+                    value={sellItemForm.category}
+                    onChange={(e) => setSellItemForm({ ...sellItemForm, category: e.target.value })}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500"
+                  >
+                    <option value="Electronics">Electronics</option>
+                    <option value="Books">Books & Notes</option>
+                    <option value="Home">Home & Furniture</option>
+                    <option value="Fashion">Fashion & Shoes</option>
+                    <option value="Gaming">Gaming & Accessories</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Price (₹ INR)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 250"
+                    value={sellItemForm.price}
+                    onChange={(e) => setSellItemForm({ ...sellItemForm, price: e.target.value })}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Condition</label>
+                  <select
+                    value={sellItemForm.condition}
+                    onChange={(e) => setSellItemForm({ ...sellItemForm, condition: e.target.value })}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500"
+                  >
+                    <option value="Like New (Pre-owned)">Like New (Pre-owned)</option>
+                    <option value="Good Condition">Good Condition</option>
+                    <option value="Open Box (Mint)">Open Box (Mint)</option>
+                    <option value="Refurbished">Refurbished</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Your Name / Handle</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Rahul S. (Student)"
+                    value={sellItemForm.seller}
+                    onChange={(e) => setSellItemForm({ ...sellItemForm, seller: e.target.value })}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Location / Distance</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 0.4 km away (Hostel Block B)"
+                  value={sellItemForm.distance}
+                  onChange={(e) => setSellItemForm({ ...sellItemForm, distance: e.target.value })}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white"
+                />
+              </div>
+
+              <div className="mt-5 flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsSellModalOpen(false)}
+                  className="w-1/3 rounded-2xl border border-slate-200 bg-slate-50 py-3 text-xs font-bold text-slate-700 hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="w-2/3 rounded-2xl bg-emerald-600 py-3 text-xs font-black text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition"
+                >
+                  Post Second-Hand Item 🚀
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   )
