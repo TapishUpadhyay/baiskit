@@ -399,6 +399,8 @@ export default function App() {
       return
     }
 
+      
+
     const results = sellers.filter((seller) => {
       const productName =
         seller.product?.toLowerCase() || ""
@@ -431,6 +433,15 @@ export default function App() {
       )
     }
   }
+
+  // --------------------------------------------------
+  // Current Store
+  // --------------------------------------------------
+
+  const currentStore =
+    apiResults?.nearbyVendors?.find(
+      (vendor) => vendor.donename === selectedVendor
+    ) || null
 
   // --------------------------------------------------
   // Home
@@ -1158,33 +1169,28 @@ export default function App() {
               {apiResults?.nearbyVendors?.length > 0 ? (
                 apiResults.nearbyVendors.map(
                   (vendor, index) => (
-                    <VendorCard
-                      key={
-                        vendor.id ||
-                        `${vendor.name}-${index}`
-                      }
-                      name={vendor.name}
-                      type={
-                        vendor.type ||
-                        "Local Store"
-                      }
-                      distance={vendor.distance}
-                      rating={vendor.rating}
-                      totalRatings={
-                        vendor.totalRatings
-                      }
-                      address={vendor.address}
-                      openNow={vendor.openNow}
-                      onView={() => {
-                        if (vendor.mapsUrl) {
-                          window.open(
-                            vendor.mapsUrl,
-                            "_blank",
-                            "noopener,noreferrer"
-                          )
-                        }
-                      }}
-                    />
+                   <VendorCard
+  key={
+    vendor.id ||
+    `${vendor.name}-${index}`
+  }
+  name={vendor.name}
+  type={
+    vendor.type ||
+    "Local Store"
+  }
+  distance={vendor.distance}
+  rating={vendor.rating}
+  totalRatings={
+    vendor.totalRatings
+  }
+  address={vendor.address}
+  openNow={vendor.openNow}
+  onView={() => {
+    setSelectedVendor(vendor.name)
+    setPage("store")
+  }}
+/>
                   )
                 )
               ) : (
@@ -1215,6 +1221,7 @@ export default function App() {
 {page === "store" && (
   <section className="mx-auto max-w-4xl animate-in fade-in duration-300">
 
+    {/* BACK BUTTON */}
     <button
       onClick={() => setPage("vendors")}
       className="mb-5 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-black text-slate-700 shadow-sm transition hover:-translate-x-0.5"
@@ -1224,7 +1231,10 @@ export default function App() {
 
     <div className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-white shadow-sm">
 
-      {/* STORE HEADER */}
+      {/* ==================================================
+          STORE HEADER
+      ================================================== */}
+
       <div className="relative overflow-hidden bg-gradient-to-br from-indigo-950 via-slate-950 to-violet-950 p-6 text-white sm:p-8">
 
         <div className="absolute -right-16 -top-20 h-48 w-48 rounded-full bg-indigo-500/20 blur-3xl" />
@@ -1233,6 +1243,7 @@ export default function App() {
 
           <div className="min-w-0">
 
+            {/* STORE NAME */}
             <div className="flex items-center gap-2">
 
               <h2 className="truncate text-xl font-black sm:text-2xl">
@@ -1287,6 +1298,7 @@ export default function App() {
 
           </div>
 
+          {/* STORE ICON */}
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-2xl backdrop-blur">
             🏪
           </div>
@@ -1294,9 +1306,13 @@ export default function App() {
         </div>
       </div>
 
-      {/* STORE CONTENT */}
+      {/* ==================================================
+          STORE CONTENT
+      ================================================== */}
+
       <div className="p-6">
 
+        {/* STORE INFORMATION */}
         <div>
 
           <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
@@ -1309,17 +1325,19 @@ export default function App() {
               : "Local store information is currently unavailable."}
           </p>
 
-
-
         </div>
 
-        {/* STORE DETAILS */}
+        {/* ==================================================
+            STORE DETAILS
+        ================================================== */}
+
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
 
           {/* RATING */}
           {currentStore?.rating !== null &&
             currentStore?.rating !== undefined && (
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+
                 <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
                   Rating
                 </p>
@@ -1327,6 +1345,7 @@ export default function App() {
                 <p className="mt-1 text-lg font-black text-slate-900">
                   ⭐ {currentStore.rating}
                 </p>
+
               </div>
             )}
 
@@ -1334,6 +1353,7 @@ export default function App() {
           {currentStore?.distance !== null &&
             currentStore?.distance !== undefined && (
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+
                 <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
                   Distance
                 </p>
@@ -1341,85 +1361,150 @@ export default function App() {
                 <p className="mt-1 text-lg font-black text-slate-900">
                   {currentStore.distance} km
                 </p>
+
               </div>
             )}
 
-            {/* STORE PRICE LISTINGS */}
-<div className="mt-8">
-
-  <div className="mb-4">
-    <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
-      Products & Prices
-    </p>
-
-    <p className="mt-1 text-xs text-slate-500">
-      Products currently available through Baiskit.
-    </p>
-  </div>
-
-  {(() => {
-    const storeListings =
-      apiResults?.priceResults?.filter(
-        (item) =>
-          item.seller === selectedVendor ||
-          item.platform === selectedVendor
-      ) || []
-
-    if (!storeListings.length) {
-      return (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
-          <p className="text-sm font-bold text-slate-700">
-            No products found for this store
-          </p>
-
-          <p className="mt-1 text-xs text-slate-400">
-            Search for a product to see available prices here.
-          </p>
         </div>
-      )
-    }
 
-    return (
-      <div className="space-y-3">
-        {storeListings.map((item, index) => (
-          <div
-            key={`${item.product}-${index}`}
-            className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
+        {/* ==================================================
+            STORE PRICE LISTINGS
+        ================================================== */}
 
-            <div className="min-w-0">
-              <p className="truncate text-sm font-black text-slate-800">
-                {item.product}
+        <div className="mt-8">
+
+          <div className="flex items-end justify-between gap-3">
+
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
+                Products & Prices
               </p>
 
-              <p className="mt-1 text-[10px] font-bold text-slate-400">
-                {item.condition || "Brand New"}
-              </p>
+              <h3 className="mt-1 text-lg font-black text-slate-900">
+                Available Listings
+              </h3>
             </div>
 
-            <div className="shrink-0 text-right">
-              <p className="text-lg font-black text-indigo-600">
-                ₹{Number(item.price).toLocaleString("en-IN")}
-              </p>
-
-              {item.distance != null && (
-                <p className="mt-1 text-[10px] text-slate-400">
-                  {item.distance} km away
-                </p>
-              )}
-            </div>
+            {currentStore && (
+              <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[9px] font-black text-slate-500">
+                Live comparison
+              </span>
+            )}
 
           </div>
-        ))}
-      </div>
-    )
-  })()}
 
-</div>
+          {(() => {
+
+            const storeListings =
+  apiResults?.priceResults?.filter((item) => {
+    const selectedName = (selectedVendor || "").toLowerCase()
+
+    const sellerName = (item.seller || "").toLowerCase()
+    const platformName = (item.platform || "").toLowerCase()
+
+    return (
+      sellerName === selectedName ||
+      platformName === selectedName
+    )
+  }) || []
+
+            if (!storeListings.length) {
+              return (
+                <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+
+                  <div className="text-3xl">
+                    🛍️
+                  </div>
+
+                  <p className="mt-2 text-sm font-black text-slate-700">
+                    No product prices available
+                  </p>
+
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                    Baiskit does not currently have product-level
+                    pricing data for this store.
+                  </p>
+
+                </div>
+              )
+            }
+
+            return (
+              <div className="mt-4 space-y-3">
+
+                {storeListings.length > 0 ? (
+  <div className="grid gap-4">
+    {storeListings.map((item, index) => (
+      <div
+        key={`${item.platform}-${item.product}-${index}`}
+        className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="font-semibold text-gray-900">
+              {item.product}
+            </h3>
+
+            <p className="mt-1 text-sm text-gray-500">
+              {item.condition || "Condition not specified"}
+            </p>
+
+            <p className="mt-2 text-sm text-gray-600">
+              Sold by {item.seller || item.platform}
+            </p>
+          </div>
+
+          <div className="text-right">
+            <p className="text-lg font-bold text-gray-900">
+              ₹{Number(item.price).toLocaleString("en-IN")}
+            </p>
+
+            {item.url && (
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-block text-sm font-medium text-blue-600 hover:underline"
+              >
+                View Deal →
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+) : (
+  <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center">
+    <p className="font-medium text-gray-700">
+      No product listings available for this store yet.
+    </p>
+
+    <p className="mt-1 text-sm text-gray-500">
+      Baiskit only shows listings when real product data is available.
+    </p>
+  </div>
+)}
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                ))}
+
+              </div>
+            )
+
+          })()}
 
         </div>
 
-        {/* ACTIONS */}
+        {/* ==================================================
+            ACTIONS
+        ================================================== */}
+
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
 
           {/* GOOGLE MAPS */}
@@ -1428,20 +1513,18 @@ export default function App() {
               href={currentStore.mapsUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-2xl bg-indigo-600 py-3 text-center text-xs font-black text-white transition hover:bg-indigo-700"
+              className="flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-xs font-black text-white shadow-sm transition hover:bg-indigo-700"
             >
-              📍 View on Google Maps
+              📍 Open in Google Maps
             </a>
           )}
 
-          {/* MESSAGE */}
+          {/* BACK TO STORES */}
           <button
-            onClick={() =>
-              showToast("Opening Live Chat...")
-            }
-            className="rounded-2xl bg-slate-950 py-3 text-xs font-black text-white transition hover:bg-slate-800"
+            onClick={() => setPage("vendors")}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
           >
-            💬 Message
+            ← Browse Nearby Stores
           </button>
 
         </div>
@@ -1451,7 +1534,7 @@ export default function App() {
     </div>
 
   </section>
-)}
+)} 
 
         {/* ==================================================
             ORDERS
@@ -1685,11 +1768,7 @@ export default function App() {
                     const isOnline =
                       deal.type === "online"
 
-                      const currentStore =
-  apiResults?.nearbyVendors?.find(
-    (vendor) => vendor.name === selectedVendor
-  ) || null
-
+                      
                     return (
                       <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-5 sm:p-6 text-white shadow-xl shadow-indigo-600/20">
 
@@ -2167,18 +2246,28 @@ export default function App() {
                               </div>
                             </div>
 
-                            {vendor.mapsUrl && (
-                              <a
-                                href={
-                                  vendor.mapsUrl
-                                }
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="mt-3 inline-flex items-center rounded-xl bg-indigo-50 px-3 py-2 text-[10px] font-black text-indigo-700 transition hover:bg-indigo-100"
-                              >
-                                Open in Maps →
-                              </a>
-                            )}
+                            <div className="mt-3 flex gap-2">
+  <button
+    onClick={() => {
+      setSelectedVendor(vendor.name)
+      setPage("store")
+    }}
+    className="rounded-lg bg-black px-3 py-2 text-sm font-medium text-white transition hover:opacity-80"
+  >
+    Visit Store →
+  </button>
+
+  {vendor.mapsUrl && (
+    <a
+      href={vendor.mapsUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium transition hover:bg-gray-100"
+    >
+      Maps
+    </a>
+  )}
+</div>
 
                           </div>
                         )
