@@ -577,6 +577,27 @@ app.get("/api/search", async (req, res) => {
       item.category.toLowerCase().includes(searchLower)
     );
 const baiskitPrices = getBaiskitPrices(product, matches);
+
+const allPriceResults = [...baiskitPrices];
+
+const lowestOverall = allPriceResults.length
+  ? allPriceResults.reduce((min, item) =>
+      item.price < min.price ? item : min
+    )
+  : null;
+
+const lowestOnline = allPriceResults
+  .filter(item => item.type === "online")
+  .sort((a, b) => a.price - b.price)[0] || null;
+
+const lowestLocal = allPriceResults
+  .filter(item => item.type === "local")
+  .sort((a, b) => a.price - b.price)[0] || null;
+
+const lowestSecondHand = allPriceResults
+  .filter(item => item.type === "second-hand")
+  .sort((a, b) => a.price - b.price)[0] || null;
+
     // Determine Google vendor type
     const category =
       matches.length > 0 ? matches[0].category : product;
@@ -656,13 +677,19 @@ res.json({
 
   baiskitListings: matches,
 
-  priceResults: baiskitPrices,
+priceResults: allPriceResults,
 
+comparison: {
+  lowestOverall,
+  lowestOnline,
+  lowestLocal,
+  lowestSecondHand
+}, 
   nearbyVendors: vendors,
 
   totalListings: matches.length,
   totalNearbyVendors: vendors.length,
-  totalPriceResults: baiskitPrices.length
+  totalPriceResults: allPriceResults.length
 });
 
   } catch (error) {
